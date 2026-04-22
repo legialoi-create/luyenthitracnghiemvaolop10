@@ -24,6 +24,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [isQuickEdit, setIsQuickEdit] = useState(false);
 
   useEffect(() => {
     fetchQuestions();
@@ -77,11 +78,17 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
 
       // Detect * marker in manual options
       const processedOptions = finalQuestion.options.map((opt, i) => {
-        if (opt.trim().startsWith('*')) {
+        let text = opt.trim();
+        if (text.startsWith('*')) {
           correctIdx = i;
-          return opt.trim().substring(1).trim();
+          // Loại bỏ dấu *
+          text = text.substring(1).trim();
+          // Loại bỏ tiếp nhãn A. B. C. D. nếu người dùng nhập thừa (vd: *A. Nội dung)
+          const labelPrefix = new RegExp(`^[A-D]\\s*[:.]\\s*`, 'i');
+          text = text.replace(labelPrefix, '').trim();
+          return text;
         }
-        return opt;
+        return text;
       });
 
       finalQuestion.options = processedOptions;
@@ -229,25 +236,57 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      previewQuestions.forEach(q => {
-        const docRef = doc(collection(db, 'questions'));
-        batch.set(docRef, {
-          content: q.content,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          category: q.category,
-          createdAt: Timestamp.now()
+      
+      if (isQuickEdit) {
+        previewQuestions.forEach(q => {
+          if (q.id) {
+            batch.update(doc(db, 'questions', q.id), {
+              correctAnswer: q.correctAnswer,
+              updatedAt: Timestamp.now()
+            });
+          }
         });
-      });
+      } else {
+        previewQuestions.forEach(q => {
+          const docRef = doc(collection(db, 'questions'));
+          batch.set(docRef, {
+            content: q.content,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            category: q.category,
+            createdAt: Timestamp.now()
+          });
+        });
+      }
+      
       await batch.commit();
       setShowPreview(false);
       setPreviewQuestions([]);
+      setIsQuickEdit(false);
       fetchQuestions();
-      alert(`Đã lưu thành công ${previewQuestions.length} câu hỏi!`);
+      alert(isQuickEdit ? `Đã cập nhật ${previewQuestions.length} đáp án!` : `Đã lưu thành công ${previewQuestions.length} câu hỏi!`);
     } catch (e) {
       alert('Lỗi khi lưu dữ liệu vào database.');
     }
     setLoading(false);
+  };
+
+  const handleQuickEditAnswers = (category?: string) => {
+    let targetQuestions = questions;
+    if (category && category !== 'Tất cả') {
+      targetQuestions = questions.filter(q => q.category === category);
+    } else {
+      targetQuestions = filteredQuestions;
+    }
+
+    if (targetQuestions.length === 0) {
+      alert('Không có câu hỏi để chỉnh sửa!');
+      return;
+    }
+    
+    setPreviewQuestions(targetQuestions as ParsedQuestion[]);
+    setIsQuickEdit(true);
+    setShowPreview(true);
   };
 
   const handleFileUpload = async (category: string, type: 'json' | 'txt') => {
@@ -443,11 +482,14 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
 
                 {/* Toolbar */}
                 <div className="flex flex-col md:flex-row gap-2 items-center justify-between bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-                   <div className="flex gap-1.5">
-                      <button onClick={() => setShowAddForm(!showAddForm)} className="bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-blue-700 shadow shadow-blue-200 transition">
+                   <div className="flex gap-1.5 shrink-0 overflow-x-auto pb-1 md:pb-0">
+                      <button onClick={() => setShowAddForm(!showAddForm)} className="bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-blue-700 shadow shadow-blue-200 transition shrink-0">
                         <Plus size={14} /> Thêm thủ công
                       </button>
-                      <div className="flex bg-slate-100 p-0.5 rounded-lg">
+                      <button onClick={() => handleQuickEditAnswers()} className="bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-emerald-700 shadow shadow-emerald-200 transition shrink-0">
+                        <Edit2 size={14} /> Sửa đáp án {filterCategory !== 'Tất cả' ? `(${filterCategory.split(' ')[0]})` : ''}
+                      </button>
+                      <div className="flex bg-slate-100 p-0.5 rounded-lg shrink-0">
                         {['Tất cả', 'Số và Đại số', 'Hình học và Đo lường', 'Thống kê và Xác suất'].map(cat => (
                           <button 
                             key={cat}
@@ -489,7 +531,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                   <QuizPreview 
                     questions={previewQuestions}
                     onConfirm={confirmSaveQuestions}
-                    onCancel={() => { setShowPreview(false); setPreviewQuestions([]); }}
+                    onCancel={() => { setShowPreview(false); setPreviewQuestions([]); setIsQuickEdit(false); }}
                     onUpdateQuestion={(index, updated) => {
                       const newPreview = [...previewQuestions];
                       newPreview[index] = updated;
