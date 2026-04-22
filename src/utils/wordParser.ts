@@ -2,6 +2,7 @@ import mammoth from 'mammoth';
 import { solveQuestion } from '../services/geminiService';
 
 export interface ParsedQuestion {
+  id?: string;
   content: string;
   options: string[];
   correctAnswer: number;
