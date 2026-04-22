@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Times New Roman", Times, serif;
+}
+
+body {
+  @apply font-sans;
+}
+
+.katex {
+  @apply text-[1.1em];
+}
