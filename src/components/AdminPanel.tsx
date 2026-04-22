@@ -216,16 +216,33 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.docx';
+    input.multiple = true;
     input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      
+      if (files.length > 5) {
+        alert('Bạn chỉ có thể tải lên tối đa 5 file một lúc. 5 file đầu tiên sẽ được xử lý.');
+      }
+      
+      const selectedFiles = files.slice(0, 5);
       setLoading(true);
       try {
-        const parsed = await parseWordToQuiz(file, category);
-        setPreviewQuestions(parsed);
-        setShowPreview(true);
+        let allParsed: ParsedQuestion[] = [];
+        for (const file of selectedFiles as File[]) {
+          const parsed = await parseWordToQuiz(file, category);
+          allParsed = [...allParsed, ...parsed];
+        }
+        
+        if (allParsed.length > 0) {
+          setPreviewQuestions(allParsed);
+          setShowPreview(true);
+        } else {
+          alert('Không tìm thấy câu hỏi nào trong các file đã chọn.');
+        }
       } catch (err) {
-        alert('Lỗi xử lý file Word.');
+        console.error(err);
+        alert('Lỗi xử lý một hoặc nhiều file Word.');
       }
       setLoading(false);
     };
@@ -293,32 +310,48 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = type === 'json' ? '.json' : '.txt';
+    input.multiple = true;
     input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      
+      if (files.length > 5) {
+        alert('Bạn chỉ có thể tải lên tối đa 5 file một lúc. 5 file đầu tiên sẽ được xử lý.');
+      }
+      
+      const selectedFiles = files.slice(0, 5);
       setLoading(true);
       try {
-        const text = await file.text();
-        let parsed: ParsedQuestion[] = [];
-        
-        if (type === 'json') {
-          parsed = JSON.parse(text).map((q: any) => ({ ...q, category }));
-        } else {
-          // Xử lý TXT đơn giản theo dòng
-          const lines = text.split('\n').filter(l => l.trim());
-          for (let i = 0; i < lines.length; i += 6) {
-             if (lines[i]) {
-                parsed.push({
-                   content: lines[i],
-                   options: [lines[i+1], lines[i+2], lines[i+3], lines[i+4]],
-                   correctAnswer: parseInt(lines[i+5]) || 0,
-                   category
-                });
-             }
+        let allParsed: ParsedQuestion[] = [];
+        for (const file of selectedFiles as File[]) {
+          const text = await file.text();
+          let parsed: ParsedQuestion[] = [];
+          
+          if (type === 'json') {
+            parsed = JSON.parse(text).map((q: any) => ({ ...q, category }));
+          } else {
+            // Xử lý TXT đơn giản theo dòng
+            const lines = text.split('\n').filter(l => l.trim());
+            for (let i = 0; i < lines.length; i += 6) {
+               if (lines[i]) {
+                  parsed.push({
+                     content: lines[i],
+                     options: [lines[i+1], lines[i+4] ? lines[i+2] : '', lines[i+4] ? lines[i+3] : '', lines[i+4] ? lines[i+4] : ''], // Basic guard
+                     correctAnswer: parseInt(lines[i+5]) || 0,
+                     category
+                  });
+               }
+            }
           }
+          allParsed = [...allParsed, ...parsed];
         }
-        setPreviewQuestions(parsed);
-        setShowPreview(true);
+        
+        if (allParsed.length > 0) {
+          setPreviewQuestions(allParsed);
+          setShowPreview(true);
+        } else {
+          alert('Không tìm thấy dữ liệu hợp lệ trong các file đã chọn.');
+        }
       } catch (err) {
         alert('Lỗi xử lý file.');
       }
