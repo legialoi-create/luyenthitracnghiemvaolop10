@@ -11,6 +11,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { loginAnonymously, auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
+// Utility for password hashing
+async function hashSecret(text: string) {
+  const msgUint8 = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default function App() {
   const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login'>('landing');
   const [adminCreds, setAdminCreds] = useState({ user: '', pass: '' });
@@ -36,12 +44,19 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const user = adminCreds.user.trim();
     const pass = adminCreds.pass.trim();
 
-    if (user === 'legialoi' && pass === '123') {
+    // Hashes for: "101   101!@#" (1, 2, or 3 spaces)
+    const h1 = 'd2cdf3f325473e109ce29c85e017aeb7763ae9b0a5d55cda5891ffd515e68266'; // 3 spaces
+    const h2 = '6788db3d91c10705f4df8cf781ec7d1889813e339cd58ca68c4d51624b45502c'; // 2 spaces
+    const h3 = '6f98725838531776992520330dc372f87ee56b0d91244e837ea8a46b5fd66835'; // 1 space
+    
+    const inputHash = await hashSecret(pass);
+
+    if (user === 'legialoi' && (inputHash === h1 || inputHash === h2 || inputHash === h3)) {
       // Vì lỗi auth/admin-restricted-operation từ Firebase, chúng ta chuyển sang 
       // quản lý session cục bộ kết hợp với Relaxed Security Rules của Firestore.
       setIsLoggedIn(true);
