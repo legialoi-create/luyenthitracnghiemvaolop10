@@ -77,8 +77,17 @@ export default function App() {
           <motion.div 
             key="landing"
             exit={{ opacity: 0, y: -20 }}
-            className="min-h-screen flex flex-col items-center justify-center p-4"
+            className="min-h-screen flex flex-col items-center justify-center p-4 relative"
           >
+            {/* Nút đăng nhập Admin nhỏ ở góc trái */}
+            <button 
+              onClick={() => setView('admin_login')}
+              className="absolute top-6 left-6 flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:shadow-sm transition-all text-[10px] font-bold group"
+            >
+              <Lock size={12} className="group-hover:scale-110 transition-transform" />
+              ADMIN
+            </button>
+
             <div className="text-center mb-12">
               <div className="flex items-center justify-center gap-3 mb-6">
                 <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-200">Σ</div>
@@ -91,32 +100,21 @@ export default function App() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+            <div className="w-full max-w-xl">
               <button 
                 onClick={() => setView('quiz')}
-                className="group relative p-8 bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-blue-500 transition-all text-left"
+                className="group relative w-full p-8 md:p-12 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-blue-500 transition-all text-left flex flex-col items-center text-center"
               >
-                <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform shadow-lg shadow-blue-200">
-                  <GraduationCap size={32} />
+                <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform shadow-lg shadow-blue-200">
+                  <GraduationCap size={40} />
                 </div>
-                <h3 className="text-2xl font-bold mb-2">Học sinh</h3>
-                <p className="text-slate-500 mb-8 leading-relaxed">Làm bài trắc nghiệm: 16 câu 4 điểm theo cấu trúc 8 câu Số và Đại số, 6 câu Hình học và Đo lường, 2 câu Xác suất và Thống kê.</p>
-                <div className="flex items-center gap-2 text-blue-600 font-bold group-hover:translate-x-1 transition-transform">
-                  Bắt đầu làm bài <ArrowRight size={20} />
-                </div>
-              </button>
-
-              <button 
-                onClick={() => setView('admin_login')}
-                className="group relative p-8 bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-slate-300 transition-all text-left"
-              >
-                <div className="w-16 h-16 bg-slate-800 text-white rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform shadow-lg shadow-slate-200">
-                  <Lock size={32} />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Giáo viên</h3>
-                <p className="text-slate-500 mb-8 leading-relaxed">Quản lý kho câu hỏi, upload dữ liệu mới và theo dõi tiến độ của học sinh.</p>
-                <div className="flex items-center gap-2 text-slate-800 font-bold group-hover:translate-x-1 transition-transform">
-                  Vào Dashboard <ArrowRight size={20} />
+                <h3 className="text-3xl font-black mb-4 text-slate-800">Bắt đầu Luyện thi</h3>
+                <p className="text-slate-500 mb-10 leading-relaxed text-lg font-medium">
+                  Làm bài trắc nghiệm: 16 câu 4 điểm theo cấu trúc <br className="hidden md:block" />
+                  8 câu Số, 6 câu Hình, 2 câu Thống kê.
+                </p>
+                <div className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 group-hover:bg-blue-700 transition-colors">
+                  VÀO THI NGAY <ArrowRight size={24} />
                 </div>
               </button>
             </div>
