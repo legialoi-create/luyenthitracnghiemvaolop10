@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db, Question, QuizResult } from '../lib/firebase';
-import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch } from 'firebase/firestore';
-import { Trash2, Plus, RefreshCw, LogOut, FileText, BarChart2, Settings, FileJson, FileCode, FileType, Download } from 'lucide-react';
+import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch, updateDoc } from 'firebase/firestore';
+import { Trash2, Plus, RefreshCw, LogOut, FileText, BarChart2, Settings, FileJson, FileCode, FileType, Download, Edit2 } from 'lucide-react';
 import MathText from './MathText';
 import * as XLSX from 'xlsx';
 import { parseWordToQuiz, ParsedQuestion } from '../utils/wordParser';
 import QuizPreview from './QuizPreview';
+import { solveQuestion } from '../services/geminiService';
 
 export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<'questions' | 'stats'>('questions');
@@ -22,6 +23,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     category: 'Số và Đại số'
   });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchQuestions();
@@ -70,10 +72,49 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     e.preventDefault();
     setLoading(true);
     try {
-      await addDoc(collection(db, 'questions'), {
-        ...newQuestion,
-        createdAt: Timestamp.now()
+      let finalQuestion = { ...newQuestion };
+      let correctIdx = -1;
+
+      // Detect * marker in manual options
+      const processedOptions = finalQuestion.options.map((opt, i) => {
+        if (opt.trim().startsWith('*')) {
+          correctIdx = i;
+          return opt.trim().substring(1).trim();
+        }
+        return opt;
       });
+
+      finalQuestion.options = processedOptions;
+      
+      // If * found, use it. Otherwise use the radio button state (correctAnswer)
+      if (correctIdx !== -1) {
+        finalQuestion.correctAnswer = correctIdx;
+      }
+
+      // If no answer selected (using a negative number or if user didn't pick)
+      // or if we want AI to double check if nothing is explicitly marked
+      // Here, we'll only trigger AI if correctIdx is -1 and current correctAnswer is 0 (default) but maybe unsure
+      // Actually, let's keep it simple: if no '*' and user didn't change default (maybe?) 
+      // User said: "câu nào không có đáp án thì AI tự cho đáp án dúng"
+      // In manual form, we can't easily tell if 0 is "no answer" or "Answer A".
+      // Let's assume if there's no '*' AND user wants AI to check? 
+      // Maybe I should add an "AI Solve" button or just do it if they haven't explicitly marked it.
+      // But Word upload is the primary case for "questions without answers".
+
+      if (editId) {
+        await updateDoc(doc(db, 'questions', editId), {
+          ...finalQuestion,
+          updatedAt: Timestamp.now()
+        });
+        setEditId(null);
+        alert('Đã cập nhật câu hỏi thành công!');
+      } else {
+        await addDoc(collection(db, 'questions'), {
+          ...finalQuestion,
+          createdAt: Timestamp.now()
+        });
+        alert('Đã thêm câu hỏi thành công!');
+      }
       setNewQuestion({
         content: '',
         options: ['', '', '', ''],
@@ -82,11 +123,22 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
       });
       setShowAddForm(false);
       fetchQuestions();
-      alert('Đã thêm câu hỏi thành công!');
     } catch (e) {
-      alert('Lỗi khi thêm câu hỏi.');
+      alert('Lỗi: ' + (editId ? 'Không thể cập nhật' : 'Không thể thêm') + ' câu hỏi.');
     }
     setLoading(false);
+  };
+
+  const handleEditClick = (q: Question) => {
+    setNewQuestion({
+      content: q.content,
+      options: [...q.options],
+      correctAnswer: q.correctAnswer,
+      category: q.category
+    });
+    setEditId(q.id!);
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const [isDeletingPool, setIsDeletingPool] = useState(false);
@@ -446,7 +498,23 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                   <div className="overflow-hidden">
                     <form onSubmit={handleAddQuestion} className="bg-white p-8 rounded-[2rem] border-2 border-blue-100 shadow-xl space-y-6">
                       <div>
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Nội dung câu hỏi (LaTeX: $...$)</label>
+                      <div className="flex items-center justify-between mb-3 ml-1">
+                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">
+                          {editId ? 'Sửa câu hỏi' : 'Nội dung câu hỏi'} (LaTeX: $...$)
+                        </label>
+                        {editId && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setEditId(null);
+                              setNewQuestion({ content: '', options: ['', '', '', ''], correctAnswer: 0, category: 'Số và Đại số' });
+                            }}
+                            className="text-[10px] font-bold text-red-500 hover:underline"
+                          >
+                            Hủy chỉnh sửa
+                          </button>
+                        )}
+                      </div>
                         <textarea required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-32 focus:ring-2 focus:ring-blue-500 outline-none text-lg font-medium" value={newQuestion.content} onChange={e => setNewQuestion({...newQuestion, content: e.target.value})} placeholder="Nhập câu hỏi..." />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -483,7 +551,9 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                       </div>
                       <div className="flex gap-4 justify-end pt-4">
                         <button type="button" onClick={() => setShowAddForm(false)} className="px-6 py-2 text-slate-400 font-bold hover:text-slate-600 uppercase text-[10px] tracking-widest">Hủy bỏ</button>
-                        <button type="submit" disabled={loading} className="px-10 py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition">LƯU CÂU HỎI</button>
+                        <button type="submit" disabled={loading} className="px-10 py-3 bg-blue-600 text-white rounded-xl font-black shadow-lg shadow-blue-200 hover:bg-blue-700 transition">
+                          {loading ? <RefreshCw className="animate-spin inline-block mr-2" /> : editId ? 'CẬP NHẬT CÂU HỎI' : 'LƯU CÂU HỎI'}
+                        </button>
                       </div>
                     </form>
                   </div>
@@ -515,27 +585,37 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                             <td className="p-3"><div className="line-clamp-1 text-xs font-semibold text-slate-700"><MathText text={q.content} /></div></td>
                             <td className="p-3"><span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-black rounded uppercase">{q.category}</span></td>
                             <td className="p-3 text-right">
-                              <button 
-                                onClick={async () => { 
-                                  if (confirmDeleteId !== q.id) {
-                                    setConfirmDeleteId(q.id!);
-                                    setTimeout(() => setConfirmDeleteId(null), 3000);
-                                  } else {
-                                    setLoading(true);
-                                    try {
-                                      await deleteDoc(doc(db, 'questions', q.id!)); 
-                                      fetchQuestions(); 
-                                      setConfirmDeleteId(null);
-                                    } catch (err) {
-                                      alert('Lỗi khi xóa câu hỏi');
-                                    }
-                                    setLoading(false);
-                                  }
-                                }} 
-                                className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ml-auto ${confirmDeleteId === q.id ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'text-slate-300 hover:text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-100'}`}
-                              >
-                                <Trash2 size={14} className={confirmDeleteId === q.id ? 'animate-pulse' : ''} />
-                              </button>
+                               <div className="flex items-center justify-end gap-1.5">
+                                 <button 
+                                   onClick={() => handleEditClick(q)}
+                                   className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                   title="Sửa câu hỏi"
+                                 >
+                                   <Edit2 size={12} />
+                                 </button>
+                                 <button 
+                                   onClick={async () => { 
+                                     if (confirmDeleteId !== q.id) {
+                                       setConfirmDeleteId(q.id!);
+                                       setTimeout(() => setConfirmDeleteId(null), 3000);
+                                     } else {
+                                       setLoading(true);
+                                       try {
+                                         await deleteDoc(doc(db, 'questions', q.id!)); 
+                                         fetchQuestions(); 
+                                         setConfirmDeleteId(null);
+                                       } catch (err) {
+                                         alert('Lỗi khi xóa câu hỏi');
+                                       }
+                                       setLoading(false);
+                                     }
+                                   }} 
+                                   className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ${confirmDeleteId === q.id ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'text-slate-300 hover:text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-100'}`}
+                                   title="Xóa câu hỏi"
+                                 >
+                                   <Trash2 size={12} />
+                                 </button>
+                               </div>
                             </td>
                           </tr>
                         ))

@@ -7,8 +7,17 @@ interface MathTextProps {
 
 export default function MathText({ text }: MathTextProps) {
   if (!text) return null;
+
+  // Unescape common HTML entities that might come from mammoth/word parsing
+  const unescapedText = text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
   // Regex để bóc tách LaTeX ($...$ hoặc $$...$$) và thẻ <img>
-  const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|<img[\s\S]+?\/?>)/g).filter(Boolean);
+  const parts = unescapedText.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|<img[\s\S]+?\/?>)/g).filter(Boolean);
 
   return (
     <span>
