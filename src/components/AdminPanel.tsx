@@ -490,6 +490,11 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                     questions={previewQuestions}
                     onConfirm={confirmSaveQuestions}
                     onCancel={() => { setShowPreview(false); setPreviewQuestions([]); }}
+                    onUpdateQuestion={(index, updated) => {
+                      const newPreview = [...previewQuestions];
+                      newPreview[index] = updated;
+                      setPreviewQuestions(newPreview);
+                    }}
                     loading={loading}
                   />
                 )}
