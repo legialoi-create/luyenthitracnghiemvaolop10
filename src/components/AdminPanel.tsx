@@ -733,7 +733,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                        <div>
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Trạng thái dữ liệu</p>
                           <p className="text-[9px] font-bold text-green-500 flex items-center gap-1">
-                             <span className="w-1 h-1 bg-green-500 rounded-full inline-block"></span> Syncing
+                             <span className="w-1 h-1 bg-green-500 rounded-full inline-block"></span> Đang đồng bộ
                           </p>
                        </div>
                        <div className="flex gap-1.5">
