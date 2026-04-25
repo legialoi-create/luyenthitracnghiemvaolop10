@@ -372,6 +372,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
         ? (r.submittedAt as Timestamp).toDate().toLocaleString('vi-VN') 
         : 'N/A',
       'Lớp': r.class,
+      'Trường': r.school || 'N/A',
       'Họ và Tên': r.name,
       'Điểm (Hệ 4)': r.score.toFixed(2)
     }));
@@ -738,6 +739,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                              <th className="pl-4 pr-2">STT</th>
                              <th className="px-2">Giờ làm bài</th>
                              <th className="px-2">Lớp</th>
+                             <th className="px-2">Trường</th>
                              <th className="px-2">Tên học sinh</th>
                              <th className="pr-4 pl-2 text-right">Điểm số</th>
                           </tr>
@@ -752,6 +754,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                                    : 'N/A'}
                                </td>
                                <td className="px-2"><span className="px-1.5 py-0 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase">{r.class}</span></td>
+                               <td className="px-2"><span className="text-[9px] text-slate-500 font-bold uppercase">{r.school || 'N/A'}</span></td>
                                <td className="px-2 font-medium text-slate-800 text-[10px]">{r.name}</td>
                                <td className="pr-4 pl-2 text-right">
                                   <div className="flex flex-col items-end">
