@@ -125,6 +125,7 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
               <option value="THCS Triệu Trạch">THCS Triệu Trạch</option>
               <option value="THCS Nguyễn Bỉnh Khiêm">THCS Nguyễn Bỉnh Khiêm</option>
               <option value="THCS Lý Tự Trọng">THCS Lý Tự Trọng</option>
+              <option value="TH&THCS Triệu Sơn">TH&THCS Triệu Sơn</option>
             </select>
           </div>
           <button 
