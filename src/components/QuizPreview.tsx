@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Check, X, Save, Eye } from 'lucide-react';
+import { Check, X, Save, Eye, Pencil, CheckCircle2 } from 'lucide-react';
 import MathText from './MathText';
 import { ParsedQuestion } from '../utils/wordParser';
 
@@ -13,6 +13,19 @@ interface QuizPreviewProps {
 }
 
 export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQuestion, loading }: QuizPreviewProps) {
+  const [editStates, setEditStates] = React.useState<Record<number, 'none' | 'content' | 'options'>>({});
+
+  const toggleEdit = (idx: number) => {
+    setEditStates(prev => {
+      const current = prev[idx] || 'none';
+      let next: 'none' | 'content' | 'options' = 'none';
+      if (current === 'none') next = 'content';
+      else if (current === 'content') next = 'options';
+      else next = 'none';
+      return { ...prev, [idx]: next };
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 md:p-8">
       <motion.div 
@@ -52,40 +65,97 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
                <p className="text-slate-400 font-bold">Không bóc tách được câu hỏi nào.</p>
             </div>
           ) : (
-            questions.map((q, idx) => (
-              <div key={idx} className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative group overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 md:p-6 opacity-[0.03] pointer-events-none text-6xl md:text-8xl font-black italic select-none">
-                  {idx + 1}
-                </div>
-                
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-3 md:mb-4">
-                    <span className="px-2 md:px-3 py-1 bg-blue-50 text-blue-600 text-[8px] md:text-[10px] font-black rounded-lg border border-blue-100 uppercase">{q.category}</span>
-                    <span className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Câu hỏi {idx + 1}</span>
+            questions.map((q, idx) => {
+              const state = editStates[idx] || 'none';
+              
+              return (
+                <div key={idx} className={`bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border transition-all relative group overflow-hidden ${state !== 'none' ? 'border-blue-400 ring-4 ring-blue-50 shadow-xl' : 'border-slate-200 shadow-sm'}`}>
+                  <div className="absolute top-0 right-0 p-4 md:p-6 opacity-[0.03] pointer-events-none text-6xl md:text-8xl font-black italic select-none">
+                    {idx + 1}
                   </div>
                   
-                  <div className="text-base md:text-xl font-semibold text-slate-800 mb-6 md:mb-8 leading-relaxed">
-                    <MathText text={q.content} />
-                  </div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3 md:mb-4">
+                      <div className="flex items-center gap-3">
+                        <span className="px-2 md:px-3 py-1 bg-blue-50 text-blue-600 text-[8px] md:text-[10px] font-black rounded-lg border border-blue-100 uppercase">{q.category}</span>
+                        <span className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Câu hỏi {idx + 1}</span>
+                        {state !== 'none' && (
+                          <span className="px-2 py-1 bg-orange-100 text-orange-600 text-[8px] md:text-[10px] font-black rounded-lg uppercase animate-pulse">
+                            {state === 'content' ? 'Sửa nội dung' : 'Sửa đáp án'}
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    {q.options.map((opt, oIdx) => (
                       <button 
-                        key={oIdx} 
-                        onClick={() => onUpdateQuestion(idx, { ...q, correctAnswer: oIdx })}
-                        className={`p-3 md:p-4 rounded-xl border flex items-start gap-3 md:gap-4 text-left transition-all hover:border-blue-200 ${q.correctAnswer === oIdx ? 'bg-green-50 border-green-200 text-green-900 shadow-sm' : 'bg-slate-50 border-slate-100/50 text-slate-600'}`}
+                        onClick={() => toggleEdit(idx)}
+                        className={`p-2 rounded-xl transition-all flex items-center gap-2 ${state === 'none' ? 'bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600' : 'bg-blue-600 text-white shadow-lg shadow-blue-200'}`}
+                        title={state === 'none' ? 'Sửa câu hỏi' : state === 'content' ? 'Chuyển sang sửa đáp án' : 'Xong'}
                       >
-                        <div className={`w-6 h-6 md:w-8 md:h-8 rounded-lg flex items-center justify-center font-bold text-[10px] md:text-xs shrink-0 ${q.correctAnswer === oIdx ? 'bg-green-500 text-white shadow-md shadow-green-200' : 'bg-white text-slate-400 border border-slate-200'}`}>
-                          {String.fromCharCode(65 + oIdx)}
-                        </div>
-                        <div className="mt-0.5 md:mt-1 font-medium text-sm md:text-base flex-1"><MathText text={opt} /></div>
-                        {q.correctAnswer === oIdx && <Check size={16} className="ml-auto text-green-500 shrink-0 self-center" />}
+                        {state === 'none' ? <Pencil size={18} /> : state === 'content' ? <Pencil size={18} /> : <CheckCircle2 size={18} />}
+                        <span className="text-[10px] font-bold uppercase hidden md:inline">
+                          {state === 'none' ? 'Sửa' : state === 'content' ? 'Sửa Đ.Án' : 'Xong'}
+                        </span>
                       </button>
-                    ))}
+                    </div>
+                    
+                    <div className="text-base md:text-xl font-semibold text-slate-800 mb-6 md:mb-8 leading-relaxed">
+                      {state === 'content' ? (
+                        <textarea 
+                          className="w-full p-4 bg-blue-50 border border-blue-200 rounded-2xl text-base md:text-lg font-medium outline-none h-32 focus:ring-2 focus:ring-blue-500 transition-all"
+                          value={q.content}
+                          onChange={(e) => onUpdateQuestion(idx, { ...q, content: e.target.value })}
+                          placeholder="Nhập nội dung câu hỏi..."
+                          autoFocus
+                        />
+                      ) : (
+                        <MathText text={q.content} />
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      {q.options.map((opt, oIdx) => (
+                        <div key={oIdx} className="relative group/opt">
+                          {state === 'options' ? (
+                            <div className="flex items-center gap-2 bg-blue-50 p-2 rounded-xl border border-blue-100">
+                               <div 
+                                onClick={() => onUpdateQuestion(idx, { ...q, correctAnswer: oIdx })}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 cursor-pointer transition-all ${q.correctAnswer === oIdx ? 'bg-green-500 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-200 shadow-inner'}`}>
+                                  {String.fromCharCode(65 + oIdx)}
+                                </div>
+                                <input 
+                                  className="flex-1 bg-transparent border-none outline-none text-sm md:text-base font-medium py-2 px-1 focus:ring-0"
+                                  value={opt}
+                                  onChange={(e) => {
+                                    const nextOptions = [...q.options];
+                                    nextOptions[oIdx] = e.target.value;
+                                    onUpdateQuestion(idx, { ...q, options: nextOptions });
+                                  }}
+                                  placeholder={`Đáp án ${String.fromCharCode(65 + oIdx)}...`}
+                                />
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                if (state === 'none') {
+                                  onUpdateQuestion(idx, { ...q, correctAnswer: oIdx });
+                                }
+                              }}
+                              className={`w-full p-3 md:p-4 rounded-xl border flex items-start gap-3 md:gap-4 text-left transition-all ${state === 'none' ? 'hover:border-blue-200 cursor-pointer' : 'cursor-default'} ${q.correctAnswer === oIdx ? 'bg-green-50 border-green-200 text-green-900 shadow-sm' : 'bg-slate-50 border-slate-100/50 text-slate-600'}`}
+                            >
+                              <div className={`w-6 h-6 md:w-8 md:h-8 rounded-lg flex items-center justify-center font-bold text-[10px] md:text-xs shrink-0 ${q.correctAnswer === oIdx ? 'bg-green-500 text-white shadow-md shadow-green-200' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                {String.fromCharCode(65 + oIdx)}
+                              </div>
+                              <div className="mt-0.5 md:mt-1 font-medium text-sm md:text-base flex-1"><MathText text={opt} /></div>
+                              {q.correctAnswer === oIdx && <Check size={16} className="ml-auto text-green-500 shrink-0 self-center" />}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
