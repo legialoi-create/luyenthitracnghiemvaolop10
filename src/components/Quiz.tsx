@@ -8,7 +8,7 @@ import MathText from './MathText';
 export default function Quiz({ onBack }: { onBack?: () => void }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentStep, setCurrentStep] = useState<'info' | 'doing' | 'result' | 'review'>('info');
-  const [studentInfo, setStudentInfo] = useState({ name: '', class: '' });
+  const [studentInfo, setStudentInfo] = useState({ name: '', class: '', school: '' });
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -28,7 +28,7 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
   };
 
   const startQuiz = async () => {
-    if (!studentInfo.name || !studentInfo.class) {
+    if (!studentInfo.name || !studentInfo.class || !studentInfo.school) {
       alert('Vui lòng nhập đầy đủ thông tin');
       return;
     }
@@ -58,6 +58,7 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
       await addDoc(collection(db, 'results'), {
         name: studentInfo.name,
         class: studentInfo.class,
+        school: studentInfo.school,
         score: finalScore,
         correctCount: count,
         totalQuestions: questions.length,
@@ -100,13 +101,31 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
           </div>
           <div>
             <label className="block text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2 ml-1">Lớp / Khối</label>
-            <input 
-              type="text" 
-              className="w-full p-3 md:p-4 bg-slate-50 border border-slate-100 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-base md:text-lg"
-              placeholder="9A"
+            <select 
+              className="w-full p-3 md:p-4 bg-slate-50 border border-slate-100 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-base md:text-lg appearance-none cursor-pointer"
               value={studentInfo.class}
               onChange={e => setStudentInfo({...studentInfo, class: e.target.value})}
-            />
+            >
+              <option value="">Chọn lớp...</option>
+              <option value="9A">9A</option>
+              <option value="9B">9B</option>
+              <option value="9C">9C</option>
+              <option value="9D">9D</option>
+              <option value="9E">9E</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2 ml-1">Trường</label>
+            <select 
+              className="w-full p-3 md:p-4 bg-slate-50 border border-slate-100 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-base md:text-lg appearance-none cursor-pointer"
+              value={studentInfo.school}
+              onChange={e => setStudentInfo({...studentInfo, school: e.target.value})}
+            >
+              <option value="">Chọn trường...</option>
+              <option value="THCS Triệu Trạch">THCS Triệu Trạch</option>
+              <option value="THCS Nguyễn Bỉnh Khiêm">THCS Nguyễn Bỉnh Khiêm</option>
+              <option value="THCS Lý Tự Trọng">THCS Lý Tự Trọng</option>
+            </select>
           </div>
           <button 
             onClick={startQuiz}
