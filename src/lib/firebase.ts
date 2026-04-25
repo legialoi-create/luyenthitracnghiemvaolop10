@@ -25,6 +25,7 @@ export interface QuizResult {
   id?: string;
   name: string;
   class: string;
+  school?: string;
   score: number;
   startTime: Timestamp | Date;
   submittedAt: Timestamp | Date;
