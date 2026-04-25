@@ -212,6 +212,19 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     setLoading(false);
   };
 
+  const handleDeleteResult = async (id: string) => {
+    if (!confirm('Xóa kết quả thi của học sinh này?')) return;
+    setLoading(true);
+    try {
+      await deleteDoc(doc(db, 'results', id));
+      setResults(prev => prev.filter(r => r.id !== id));
+      alert('Đã xóa kết quả!');
+    } catch (e) {
+      alert('Lỗi khi xóa kết quả.');
+    }
+    setLoading(false);
+  };
+
   const handleSmartUpload = async (category: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -742,6 +755,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                              <th className="px-2">Trường</th>
                              <th className="px-2">Tên học sinh</th>
                              <th className="pr-4 pl-2 text-right">Điểm số</th>
+                             <th className="w-10 text-center pr-2">Xoá</th>
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-slate-100">
@@ -762,6 +776,15 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                                        {r.score.toFixed(2)}
                                      </span>
                                   </div>
+                               </td>
+                               <td className="pr-2 text-center">
+                                  <button 
+                                    onClick={() => handleDeleteResult(r.id!)}
+                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                                    title="Xoá kết quả"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
                                </td>
                             </tr>
                           ))}
