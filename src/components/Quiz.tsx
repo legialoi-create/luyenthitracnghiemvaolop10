@@ -17,14 +17,21 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAndRandomize = async () => {
-    const snapshot = await getDocs(collection(db, 'questions'));
-    const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
-    
-    const algebra = all.filter(q => q.category === 'Số và Đại số').sort(() => 0.5 - Math.random()).slice(0, 8);
-    const geometry = all.filter(q => q.category === 'Hình học và Đo lường').sort(() => 0.5 - Math.random()).slice(0, 6);
-    const stats = all.filter(q => q.category === 'Thống kê và Xác suất').sort(() => 0.5 - Math.random()).slice(0, 2);
-    
-    setQuestions([...algebra, ...geometry, ...stats].sort(() => 0.5 - Math.random()));
+    try {
+      const snapshot = await getDocs(collection(db, 'questions'));
+      const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
+      
+      const algebra = all.filter(q => q.category === 'Số và Đại số').sort(() => 0.5 - Math.random()).slice(0, 8);
+      const geometry = all.filter(q => q.category === 'Hình học và Đo lường').sort(() => 0.5 - Math.random()).slice(0, 6);
+      const stats = all.filter(q => q.category === 'Thống kê và Xác suất').sort(() => 0.5 - Math.random()).slice(0, 2);
+      
+      setQuestions([...algebra, ...geometry, ...stats]);
+      return true;
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+      alert("Lỗi khi tải câu hỏi, có thể do lỗi bảo mật hoặc cơ sở dữ liệu trống.");
+      return false;
+    }
   };
 
   const startQuiz = async () => {
@@ -32,9 +39,11 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
       alert('Vui lòng nhập đầy đủ thông tin');
       return;
     }
-    await fetchAndRandomize();
-    setStartTime(new Date());
-    setCurrentStep('doing');
+    const success = await fetchAndRandomize();
+    if (success) {
+      setStartTime(new Date());
+      setCurrentStep('doing');
+    }
   };
 
   const handleSubmit = async () => {
@@ -378,7 +387,15 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
               Xem lại bài làm
             </button>
             <button 
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                setStudentInfo({ name: '', class: '', school: '' });
+                setUserAnswers({});
+                setCurrentIndex(0);
+                setScore(0);
+                setCorrectCount(0);
+                setQuestions([]);
+                setCurrentStep('info');
+              }}
               className="w-full md:w-auto px-8 py-4 md:py-5 bg-slate-900 text-white rounded-xl md:rounded-2xl font-black text-xs md:text-sm hover:bg-slate-800 transition shadow-xl shadow-slate-200 uppercase tracking-widest"
             >
               Làm đề mới
