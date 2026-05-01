@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, Question, QuizResult } from '../lib/firebase';
-import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch, updateDoc, setDoc } from 'firebase/firestore';
 import { Trash2, Plus, RefreshCw, LogOut, FileText, BarChart2, Settings, FileJson, FileCode, FileType, Download, Edit2 } from 'lucide-react';
 import MathText from './MathText';
 import * as XLSX from 'xlsx';
@@ -35,7 +35,9 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     try {
       const q = query(collection(db, 'questions'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
-      setQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question)));
+      const qs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
+      setQuestions(qs);
+      syncMetadata(qs);
     } catch (e) {
       console.log("Ordered fetch failed, falling back to simple fetch:", e);
       try {
@@ -53,9 +55,24 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
           return getTime(b.createdAt) - getTime(a.createdAt);
         });
         setQuestions(qs);
+        syncMetadata(qs);
       } catch (err2) {
         console.error("Critical error fetching questions:", err2);
       }
+    }
+  };
+
+  const syncMetadata = async (qs: Question[]) => {
+    try {
+      const lists = {
+        'Số và Đại số': qs.filter((q) => q.category === 'Số và Đại số').map((q) => q.id),
+        'Hình học và Đo lường': qs.filter((q) => q.category === 'Hình học và Đo lường').map((q) => q.id),
+        'Thống kê và Xác suất': qs.filter((q) => q.category === 'Thống kê và Xác suất').map((q) => q.id),
+      };
+      await setDoc(doc(db, 'metadata', 'questions'), lists);
+      console.log('Metadata synced with', qs.length, 'questions');
+    } catch (err) {
+      console.error("Failed to sync metadata:", err);
     }
   };
 
@@ -733,7 +750,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                        <div>
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Trạng thái dữ liệu</p>
                           <p className="text-[9px] font-bold text-green-500 flex items-center gap-1">
-                             <span className="w-1 h-1 bg-green-500 rounded-full inline-block"></span> Đang đồng bộ
+                             <span className="w-1 h-1 bg-green-500 rounded-full inline-block"></span> Syncing
                           </p>
                        </div>
                        <div className="flex gap-1.5">

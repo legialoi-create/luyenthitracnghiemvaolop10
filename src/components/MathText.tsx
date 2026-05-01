@@ -23,9 +23,9 @@ export default function MathText({ text }: MathTextProps) {
     <span>
       {parts.map((part, index) => {
         if (part.startsWith('$$') && part.endsWith('$$')) {
-          return <BlockMath key={index} math={part.slice(2, -2)} />;
+          return <BlockMath key={index} math={part.slice(2, -2)} errorColor={'#cc0000'} renderError={(error) => <span title={error.message}>{part}</span>} settings={{ strict: 'ignore' }} />;
         } else if (part.startsWith('$') && part.endsWith('$')) {
-          return <InlineMath key={index} math={part.slice(1, -1)} />;
+          return <InlineMath key={index} math={part.slice(1, -1)} errorColor={'#cc0000'} renderError={(error) => <span title={error.message}>{part}</span>} settings={{ strict: 'ignore' }} />;
         } else if (part.startsWith('<img')) {
           // Hiển thị ảnh trích xuất từ Word
           return <span key={index} className="inline-block my-2 max-w-full" dangerouslySetInnerHTML={{ __html: part }} />;

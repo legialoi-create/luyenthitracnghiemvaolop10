@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, Question, QuizResult } from '../lib/firebase';
-import { collection, addDoc, getDocs, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp, serverTimestamp, doc, getDoc, query, where, documentId } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, ChevronRight, ChevronLeft, Send, User } from 'lucide-react';
 import MathText from './MathText';
@@ -18,18 +18,53 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
 
   const fetchAndRandomize = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'questions'));
-      const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
+      // 1. Fetch metadata holding IDs
+      const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
+      let selectedIds: string[] = [];
+      let lists: any = {};
       
-      const algebra = all.filter(q => q.category === 'Số và Đại số').sort(() => 0.5 - Math.random()).slice(0, 8);
-      const geometry = all.filter(q => q.category === 'Hình học và Đo lường').sort(() => 0.5 - Math.random()).slice(0, 6);
-      const stats = all.filter(q => q.category === 'Thống kê và Xác suất').sort(() => 0.5 - Math.random()).slice(0, 2);
+      if (metaDoc.exists()) {
+        lists = metaDoc.data();
+        const algIds = (lists['Số và Đại số'] || []).sort(() => 0.5 - Math.random()).slice(0, 8);
+        const geoIds = (lists['Hình học và Đo lường'] || []).sort(() => 0.5 - Math.random()).slice(0, 6);
+        const statIds = (lists['Thống kê và Xác suất'] || []).sort(() => 0.5 - Math.random()).slice(0, 2);
+        selectedIds = [...algIds, ...geoIds, ...statIds];
+      }
       
-      setQuestions([...algebra, ...geometry, ...stats]);
+      let allSelected: Question[] = [];
+      
+      if (selectedIds.length > 0) {
+        // 2. Fetch only selected docs in chunks of 10
+        const chunks = [];
+        for(let i = 0; i < selectedIds.length; i += 10) {
+            chunks.push(selectedIds.slice(i, i + 10));
+        }
+        
+        for (const chunk of chunks) {
+           if(chunk.length === 0) continue;
+           const q = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
+           const snapshot = await getDocs(q);
+           allSelected = allSelected.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
+        }
+      }
+
+      if (allSelected.length === 0) {
+        console.warn("Metadata empty or out of sync, falling back to full fetch");
+        const fullSnapshot = await getDocs(collection(db, 'questions'));
+        let all = fullSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
+        if (all.length === 0) throw new Error("Ngân hàng câu hỏi trống.");
+        
+        const algebra = all.filter(q => q.category === 'Số và Đại số').sort(() => 0.5 - Math.random()).slice(0, 8);
+        const geometry = all.filter(q => q.category === 'Hình học và Đo lường').sort(() => 0.5 - Math.random()).slice(0, 6);
+        const stats = all.filter(q => q.category === 'Thống kê và Xác suất').sort(() => 0.5 - Math.random()).slice(0, 2);
+        allSelected = [...algebra, ...geometry, ...stats];
+      }
+
+      setQuestions(allSelected.sort(() => 0.5 - Math.random()));
       return true;
     } catch (error) {
       console.error("Error fetching questions:", error);
-      alert("Lỗi khi tải câu hỏi, có thể do lỗi bảo mật hoặc cơ sở dữ liệu trống.");
+      alert("Lỗi khi tải câu hỏi: " + (error as Error).message);
       return false;
     }
   };
