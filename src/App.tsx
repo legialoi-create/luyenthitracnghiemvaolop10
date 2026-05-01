@@ -8,8 +8,7 @@ import Quiz from './components/Quiz';
 import AdminPanel from './components/AdminPanel';
 import { Lock, GraduationCap, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { loginAnonymously, auth } from './lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './lib/firebase';
 
 // Utility for password hashing
 async function hashSecret(text: string) {
@@ -22,26 +21,12 @@ async function hashSecret(text: string) {
 export default function App() {
   const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login'>('landing');
   const [adminCreds, setAdminCreds] = useState({ user: '', pass: '' });
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState<any>(null);
-
   useEffect(() => {
     // Kiểm tra session cục bộ (local)
     const isAdminSession = sessionStorage.getItem('isAdmin') === 'true';
     if (isAdminSession) {
-      setIsLoggedIn(true);
       setView('admin'); // Tự động vào lại Admin nếu đã đăng nhập
     }
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      const isStillAdmin = sessionStorage.getItem('isAdmin') === 'true';
-      // Giữ trạng thái đăng nhập nếu có user hoặc đã xác thực local
-      if (user || isStillAdmin) {
-        setIsLoggedIn(true);
-      }
-    });
-    return () => unsubscribe();
   }, []);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -59,12 +44,8 @@ export default function App() {
     if (user === 'legialoi' && (inputHash === h1 || inputHash === h2 || inputHash === h3)) {
       // Vì lỗi auth/admin-restricted-operation từ Firebase, chúng ta chuyển sang 
       // quản lý session cục bộ kết hợp với Relaxed Security Rules của Firestore.
-      setIsLoggedIn(true);
       setView('admin');
       sessionStorage.setItem('isAdmin', 'true');
-      
-      // Thử đăng nhập ẩn danh ở background, nếu lỗi thì cũng không chặn user
-      loginAnonymously().catch(err => console.log("Silent auth background failed:", err));
     } else {
       alert('Sai thông tin đăng nhập! Vui lòng kiểm tra lại Username/Password.');
     }
@@ -199,7 +180,6 @@ export default function App() {
         {view === 'admin' && (
           <div className="min-h-screen bg-[#f0f4f8]">
             <AdminPanel onLogout={() => { 
-              setIsLoggedIn(false); 
               setView('landing'); 
               sessionStorage.removeItem('isAdmin');
               auth.signOut();
