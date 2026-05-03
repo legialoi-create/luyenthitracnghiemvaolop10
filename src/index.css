@@ -10,4 +10,14 @@ body {
 
 .katex {
   @apply text-[1.1em];
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding-bottom: 0.25rem;
 }
