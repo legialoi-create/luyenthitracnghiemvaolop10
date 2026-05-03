@@ -601,6 +601,11 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                       newPreview[index] = updated;
                       setPreviewQuestions(newPreview);
                     }}
+                    onDeleteQuestion={(index) => {
+                      const newPreview = [...previewQuestions];
+                      newPreview.splice(index, 1);
+                      setPreviewQuestions(newPreview);
+                    }}
                     loading={loading}
                   />
                 )}

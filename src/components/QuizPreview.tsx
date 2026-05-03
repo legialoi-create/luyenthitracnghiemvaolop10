@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Check, X, Save, Eye, Pencil, CheckCircle2 } from 'lucide-react';
+import { Check, X, Save, Eye, Pencil, CheckCircle2, Trash2 } from 'lucide-react';
 import MathText from './MathText';
 import { ParsedQuestion } from '../utils/wordParser';
 
@@ -9,10 +9,11 @@ interface QuizPreviewProps {
   onConfirm: () => void;
   onCancel: () => void;
   onUpdateQuestion: (index: number, updated: ParsedQuestion) => void;
+  onDeleteQuestion?: (index: number) => void;
   loading?: boolean;
 }
 
-export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQuestion, loading }: QuizPreviewProps) {
+export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQuestion, onDeleteQuestion, loading }: QuizPreviewProps) {
   const [editStates, setEditStates] = React.useState<Record<number, 'none' | 'content' | 'options'>>({});
 
   const toggleEdit = (idx: number) => {
@@ -86,16 +87,32 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
                         )}
                       </div>
 
-                      <button 
-                        onClick={() => toggleEdit(idx)}
-                        className={`p-2 rounded-xl transition-all flex items-center gap-2 ${state === 'none' ? 'bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600' : 'bg-blue-600 text-white shadow-lg shadow-blue-200'}`}
-                        title={state === 'none' ? 'Sửa câu hỏi' : state === 'content' ? 'Chuyển sang sửa đáp án' : 'Xong'}
-                      >
-                        {state === 'none' ? <Pencil size={18} /> : state === 'content' ? <Pencil size={18} /> : <CheckCircle2 size={18} />}
-                        <span className="text-[10px] font-bold uppercase hidden md:inline">
-                          {state === 'none' ? 'Sửa' : state === 'content' ? 'Sửa Đ.Án' : 'Xong'}
-                        </span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {onDeleteQuestion && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) {
+                                onDeleteQuestion(idx);
+                              }
+                            }}
+                            className="p-2 rounded-xl transition-all flex items-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700"
+                            title="Xóa câu hỏi này"
+                          >
+                            <Trash2 size={18} />
+                            <span className="text-[10px] font-bold uppercase hidden md:inline">Xóa</span>
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => toggleEdit(idx)}
+                          className={`p-2 rounded-xl transition-all flex items-center gap-2 ${state === 'none' ? 'bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600' : 'bg-blue-600 text-white shadow-lg shadow-blue-200'}`}
+                          title={state === 'none' ? 'Sửa câu hỏi' : state === 'content' ? 'Chuyển sang sửa đáp án' : 'Xong'}
+                        >
+                          {state === 'none' ? <Pencil size={18} /> : state === 'content' ? <Pencil size={18} /> : <CheckCircle2 size={18} />}
+                          <span className="text-[10px] font-bold uppercase hidden md:inline">
+                            {state === 'none' ? 'Sửa' : state === 'content' ? 'Sửa Đ.Án' : 'Xong'}
+                          </span>
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="text-base md:text-xl font-semibold text-slate-800 mb-6 md:mb-8 leading-relaxed">
