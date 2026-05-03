@@ -415,6 +415,49 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     XLSX.writeFile(workbook, fileName);
   };
 
+  const handleDownloadWord = () => {
+    let target = questions;
+    if (filterCategory !== 'Tất cả') target = questions.filter(q => q.category === filterCategory);
+
+    if (target.length === 0) {
+      alert("Không có câu hỏi nào để tải.");
+      return;
+    }
+
+    let htmlContent = `<div style="font-family: 'Times New Roman', serif; font-size: 14pt;">`;
+    target.forEach((q, idx) => {
+      let content = q.content || '';
+      content = content.replace(/\n/g, '<br/>');
+      
+      htmlContent += `<p><b>Câu ${idx + 1}:</b> ${content}</p>`;
+      
+      (q.options || []).forEach((opt, oIdx) => {
+        let optText = opt || '';
+        optText = optText.replace(/\n/g, '<br/>');
+        const isCorrect = q.correctAnswer === oIdx;
+        const prefix = isCorrect ? '*' : '';
+        htmlContent += `<p>${prefix}${String.fromCharCode(65 + oIdx)}. ${optText}</p>`;
+      });
+      
+      htmlContent += `<br/>`;
+    });
+    htmlContent += `</div>`;
+
+    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export</title></head><body>";
+    const footer = "</body></html>";
+    const sourceHTML = header + htmlContent + footer;
+
+    const blob = new Blob(['\\ufeff', sourceHTML], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const fileDownload = document.createElement("a");
+    fileDownload.href = url;
+    fileDownload.download = `Kho_De_${filterCategory.replace(/\\s+/g, '_')}.doc`;
+    document.body.appendChild(fileDownload);
+    fileDownload.click();
+    document.body.removeChild(fileDownload);
+    URL.revokeObjectURL(url);
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('Tất cả');
 
@@ -564,6 +607,9 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                           </button>
                         ))}
                       </div>
+                      <button onClick={handleDownloadWord} className="bg-amber-500 text-white px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-amber-600 shadow shadow-amber-200 transition shrink-0" title="Tải kho đề Word">
+                        <Download size={14} /> Tải {filterCategory !== 'Tất cả' ? filterCategory.split(' ')[0] : 'đề'}
+                      </button>
                    </div>
                    <div className="flex gap-1.5">
                       <button 
