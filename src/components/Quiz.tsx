@@ -258,7 +258,7 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
 
               <div className="relative z-10 flex-1 flex flex-col">
                 <h3 className="text-[10px] md:text-xs font-black text-blue-600 uppercase tracking-[0.2em] mb-4 md:mb-6">Câu hỏi số {currentIndex + 1}:</h3>
-                <div className="text-lg md:text-2xl leading-relaxed font-semibold text-slate-800 mb-6 md:mb-12">
+                <div className="text-lg md:text-2xl leading-relaxed font-semibold text-slate-800 mb-6 md:mb-12 overflow-x-auto max-w-full">
                   <MathText text={q.content} />
                 </div>
 
@@ -291,7 +291,7 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
                       }`}>
                         {String.fromCharCode(65 + i)}
                       </div>
-                      <div className="mt-1 md:mt-2 text-sm md:text-lg font-medium tracking-tight">
+                      <div className="mt-1 md:mt-2 text-sm md:text-lg font-medium tracking-tight overflow-x-auto max-w-full flex-1 min-w-0">
                         <MathText text={opt} />
                       </div>
                       {isReview && i === q.correctAnswer && (

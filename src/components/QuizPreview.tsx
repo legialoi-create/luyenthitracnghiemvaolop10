@@ -115,7 +115,7 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
                       </div>
                     </div>
                     
-                    <div className="text-base md:text-xl font-semibold text-slate-800 mb-6 md:mb-8 leading-relaxed">
+                    <div className="text-base md:text-xl font-semibold text-slate-800 mb-6 md:mb-8 leading-relaxed overflow-x-auto max-w-full">
                       {state === 'content' ? (
                         <textarea 
                           className="w-full p-4 bg-blue-50 border border-blue-200 rounded-2xl text-base md:text-lg font-medium outline-none h-32 focus:ring-2 focus:ring-blue-500 transition-all"
@@ -162,7 +162,7 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
                               <div className={`w-6 h-6 md:w-8 md:h-8 rounded-lg flex items-center justify-center font-bold text-[10px] md:text-xs shrink-0 ${q.correctAnswer === oIdx ? 'bg-green-500 text-white shadow-md shadow-green-200' : 'bg-white text-slate-400 border border-slate-200'}`}>
                                 {String.fromCharCode(65 + oIdx)}
                               </div>
-                              <div className="mt-0.5 md:mt-1 font-medium text-sm md:text-base flex-1"><MathText text={opt} /></div>
+                              <div className="mt-0.5 md:mt-1 font-medium text-sm md:text-base flex-1 overflow-x-auto max-w-full min-w-0"><MathText text={opt} /></div>
                               {q.correctAnswer === oIdx && <Check size={16} className="ml-auto text-green-500 shrink-0 self-center" />}
                             </button>
                           )}
