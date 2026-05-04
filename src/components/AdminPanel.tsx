@@ -25,6 +25,9 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [isQuickEdit, setIsQuickEdit] = useState(false);
+  const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
+  const [pendingUpdates, setPendingUpdates] = useState<Question[]>([]);
+  const hasChanges = pendingDeletes.length > 0 || pendingUpdates.length > 0;
 
   useEffect(() => {
     fetchQuestions();
@@ -126,17 +129,23 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
       // But Word upload is the primary case for "questions without answers".
 
       if (editId) {
-        await updateDoc(doc(db, 'questions', editId), {
-          ...finalQuestion,
-          updatedAt: Timestamp.now()
+        const updatedQuestion = { ...finalQuestion, id: editId, updatedAt: Timestamp.now() } as Question;
+        setPendingUpdates(prev => {
+          const filtered = prev.filter(p => p.id !== editId);
+          return [...filtered, updatedQuestion];
         });
+        
+        const updatedQuestions = questions.map(q => q.id === editId ? updatedQuestion : q);
+        setQuestions(updatedQuestions);
         setEditId(null);
-        alert('Đã cập nhật câu hỏi thành công!');
       } else {
-        await addDoc(collection(db, 'questions'), {
+        const docRef = await addDoc(collection(db, 'questions'), {
           ...finalQuestion,
           createdAt: Timestamp.now()
         });
+        const newQuestions = [...questions, { id: docRef.id, ...finalQuestion, createdAt: new Date() } as Question];
+        setQuestions(newQuestions);
+        syncMetadata(newQuestions);
         alert('Đã thêm câu hỏi thành công!');
       }
       setNewQuestion({
@@ -146,7 +155,6 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
         category: 'Số và Đại số'
       });
       setShowAddForm(false);
-      fetchQuestions();
     } catch (e) {
       alert('Lỗi: ' + (editId ? 'Không thể cập nhật' : 'Không thể thêm') + ' câu hỏi.');
     }
@@ -166,6 +174,36 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
   };
 
   const [isDeletingPool, setIsDeletingPool] = useState(false);
+
+  const handleSaveAllChanges = async () => {
+    if (!hasChanges) return;
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      
+      // Xử lý xóa
+      pendingDeletes.forEach(id => {
+        batch.delete(doc(db, 'questions', id));
+      });
+      
+      // Xử lý cập nhật
+      pendingUpdates.forEach(q => {
+        const { id, ...data } = q;
+        batch.update(doc(db, 'questions', id!), { ...data });
+      });
+      
+      await batch.commit();
+      await syncMetadata(questions);
+      
+      setPendingDeletes([]);
+      setPendingUpdates([]);
+      alert(`Đã lưu thành công: Xóa ${pendingDeletes.length} câu, Cập nhật ${pendingUpdates.length} câu.`);
+    } catch (e) {
+      console.error(e);
+      alert('Lỗi khi lưu thay đổi hàng loạt.');
+    }
+    setLoading(false);
+  };
 
   const handleRefreshPool = async () => {
     // Không dùng window.confirm vì có thể bị trình duyệt chặn trong iframe
@@ -284,6 +322,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     try {
       const batch = writeBatch(db);
       
+      let newLocalQuestions: Question[] = [];
       if (isQuickEdit) {
         previewQuestions.forEach(q => {
           if (q.id) {
@@ -293,7 +332,17 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
             });
           }
         });
+        
+        const previewMap = new Map<string, Question>(previewQuestions.filter(q => !!q.id).map(q => [q.id!, q as any]));
+        newLocalQuestions = questions.map(q => {
+          if (q.id && previewMap.has(q.id)) {
+            return { ...q, correctAnswer: previewMap.get(q.id)!.correctAnswer };
+          }
+          return q;
+        });
+
       } else {
+        const addedQuestions: Question[] = [];
         previewQuestions.forEach(q => {
           const docRef = doc(collection(db, 'questions'));
           batch.set(docRef, {
@@ -303,14 +352,26 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
             category: q.category,
             createdAt: Timestamp.now()
           });
+          addedQuestions.push({
+            id: docRef.id,
+            content: q.content,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            category: q.category,
+            createdAt: new Date()
+          } as Question);
         });
+        newLocalQuestions = [...addedQuestions, ...questions];
       }
       
       await batch.commit();
       setShowPreview(false);
       setPreviewQuestions([]);
       setIsQuickEdit(false);
-      fetchQuestions();
+      
+      setQuestions(newLocalQuestions);
+      syncMetadata(newLocalQuestions);
+      
       alert(isQuickEdit ? `Đã cập nhật ${previewQuestions.length} đáp án!` : `Đã lưu thành công ${previewQuestions.length} câu hỏi!`);
     } catch (e) {
       alert('Lỗi khi lưu dữ liệu vào database.');
@@ -610,7 +671,18 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                       <button onClick={handleDownloadWord} className="bg-amber-500 text-white px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-amber-600 shadow shadow-amber-200 transition shrink-0" title="Tải kho đề Word">
                         <Download size={14} /> Tải {filterCategory !== 'Tất cả' ? filterCategory.split(' ')[0] : 'đề'}
                       </button>
-                   </div>
+                      
+                      {hasChanges && (
+                        <button 
+                          onClick={handleSaveAllChanges} 
+                          disabled={loading}
+                          className="bg-red-600 text-white px-2.5 py-1.5 rounded-lg font-black text-[10px] flex items-center gap-1.5 hover:bg-red-700 shadow shadow-red-200 transition animate-pulse shrink-0 whitespace-nowrap"
+                        >
+                          {loading ? <RefreshCw className="animate-spin" size={12} /> : <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_5px_white]"></div>}
+                          LƯU {pendingDeletes.length + pendingUpdates.length} THAY ĐỔI
+                        </button>
+                      )}
+                    </div>
                    <div className="flex gap-1.5">
                       <button 
                         onClick={handleRefreshPool} 
@@ -761,15 +833,9 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                                        setConfirmDeleteId(q.id!);
                                        setTimeout(() => setConfirmDeleteId(null), 3000);
                                      } else {
-                                       setLoading(true);
-                                       try {
-                                         await deleteDoc(doc(db, 'questions', q.id!)); 
-                                         fetchQuestions(); 
-                                         setConfirmDeleteId(null);
-                                       } catch (err) {
-                                         alert('Lỗi khi xóa câu hỏi');
-                                       }
-                                       setLoading(false);
+                                       setPendingDeletes(prev => [...prev, q.id!]);
+                                       setQuestions(prev => prev.filter(quest => quest.id !== q.id));
+                                       setConfirmDeleteId(null);
                                      }
                                    }} 
                                    className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ${confirmDeleteId === q.id ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'text-slate-300 hover:text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-100'}`}
