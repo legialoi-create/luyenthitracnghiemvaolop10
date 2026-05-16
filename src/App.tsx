@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import Quiz from './components/Quiz';
 import AdminPanel from './components/AdminPanel';
-import { Lock, GraduationCap, ArrowRight } from 'lucide-react';
+import Leaderboard from './components/Leaderboard';
+import { Lock, GraduationCap, ArrowRight, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth } from './lib/firebase';
 
@@ -19,7 +20,7 @@ async function hashSecret(text: string) {
 }
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login'>('landing');
+  const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login' | 'leaderboard'>('landing');
   const [adminCreds, setAdminCreds] = useState({ user: '', pass: '' });
   useEffect(() => {
     // Kiểm tra session cục bộ (local)
@@ -58,7 +59,7 @@ export default function App() {
           <motion.div 
             key="landing"
             exit={{ opacity: 0, y: -20 }}
-            className="min-h-screen flex flex-col items-center justify-center p-4 relative"
+            className="flex flex-col items-center p-4 pt-6 md:pt-10 relative"
           >
             {/* Nút đăng nhập Admin nhỏ ở góc trái */}
             <button 
@@ -69,38 +70,49 @@ export default function App() {
               ADMIN
             </button>
 
-            <div className="text-center mb-12">
-              <div className="flex items-center justify-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-200">Σ</div>
-                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-800">
+            <div className="text-center mb-4">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-200">Σ</div>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-800">
                   LUYỆN THI <span className="text-blue-600">LÊ LỢI</span>
                 </h1>
               </div>
-              <p className="text-slate-500 text-lg max-w-md mx-auto font-medium">
-                Hệ thống luyện thi trắc nghiệm vào lớp 10 theo cấu trúc SGD Quảng Trị
+              <p className="text-slate-500 text-[11px] md:text-xs max-w-xl mx-auto font-medium italic">
+                Hệ thống luyện thi trắc nghiệm vào lớp 10
               </p>
             </div>
 
-            <div className="w-full max-w-xl">
-              <button 
-                onClick={() => setView('quiz')}
-                className="group relative w-full p-8 md:p-12 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-blue-500 transition-all text-left flex flex-col items-center text-center"
-              >
-                <div className="w-20 h-20 bg-blue-600 text-white rounded-3xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform shadow-lg shadow-blue-200">
-                  <GraduationCap size={40} />
+            <div className="w-full max-w-4xl space-y-2">
+              <div className="max-w-md mx-auto">
+                <button 
+                  onClick={() => setView('quiz')}
+                  className="group relative w-full p-3 md:p-4 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-blue-500 transition-all text-left flex flex-col items-center text-center"
+                >
+                  <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-lg shadow-blue-200">
+                    <GraduationCap size={20} />
+                  </div>
+                  <h3 className="text-lg font-black mb-0.5 text-slate-800">Bắt đầu Luyện thi</h3>
+                  <p className="text-slate-500 mb-3 leading-relaxed text-[11px] font-medium">
+                    16 câu 4 điểm theo cấu trúc SGD Quảng Trị
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-5 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-lg shadow-blue-200 group-hover:bg-blue-700 transition-colors">
+                    VÀO THI NGAY <ArrowRight size={16} />
+                  </div>
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/50">
+                <div className="text-center mb-1">
+                  <h3 className="text-base font-black text-slate-800 flex items-center justify-center gap-2">
+                    <Trophy className="text-amber-500" size={18} />
+                    BẢNG XẾP HẠNG
+                  </h3>
                 </div>
-                <h3 className="text-3xl font-black mb-4 text-slate-800">Bắt đầu Luyện thi</h3>
-                <p className="text-slate-500 mb-10 leading-relaxed text-lg font-medium">
-                  Làm bài trắc nghiệm: 16 câu 4 điểm theo cấu trúc <br className="hidden md:block" />
-                  8 câu Số, 6 câu Hình, 2 câu Thống kê.
-                </p>
-                <div className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-200 group-hover:bg-blue-700 transition-colors">
-                  VÀO THI NGAY <ArrowRight size={24} />
-                </div>
-              </button>
+                <Leaderboard onBack={() => {}} hideHeader />
+              </div>
             </div>
             
-            <footer className="mt-20 text-slate-400 text-sm font-medium flex items-center gap-2">
+            <footer className="mt-8 text-slate-400 text-[10px] md:text-sm font-medium flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
               &copy; 2026 LUYỆN THI LÊ LỢI. Người tạo web: Lê Gia Lợi
             </footer>
@@ -119,7 +131,27 @@ export default function App() {
               </button>
             </nav>
             <div className="p-4 md:p-8">
-              <Quiz onBack={() => setView('landing')} />
+              <Quiz 
+                onBack={() => setView('landing')} 
+                onViewLeaderboard={() => setView('leaderboard')}
+              />
+            </div>
+          </motion.div>
+        )}
+
+        {view === 'leaderboard' && (
+          <motion.div key="leaderboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen bg-[#f0f4f8]">
+            <nav className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">Σ</div>
+                <span className="text-lg font-bold tracking-tight text-slate-800">LUYỆN THI <span className="text-blue-600">LÊ LỢI</span></span>
+              </div>
+              <button onClick={() => setView('landing')} className="text-slate-400 hover:text-blue-600 font-bold text-sm flex items-center gap-2 transition-colors">
+                ← QUAY LẠI
+              </button>
+            </nav>
+            <div className="p-4 md:p-8">
+              <Leaderboard onBack={() => setView('landing')} />
             </div>
           </motion.div>
         )}
