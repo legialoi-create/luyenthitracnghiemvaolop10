@@ -179,7 +179,7 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
   };
 
   return (
-    <div className={`max-w-4xl mx-auto ${hideHeader ? 'py-0' : 'py-8'} px-4`}>
+    <div className={`max-w-2xl mx-auto ${hideHeader ? 'py-0' : 'py-8'} px-1`}>
       {!hideHeader && (
         <div className="flex items-center justify-between mb-10">
           <button 
@@ -199,8 +199,8 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
         </div>
       )}
 
-      <div className="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-        <div className="p-1 px-2 bg-slate-50/50 border-bottom border-slate-100 flex gap-1.5 md:gap-2 overflow-x-auto no-scrollbar">
+      <div className="bg-white rounded-[1.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+        <div className="p-1 px-2 bg-slate-50/50 border-bottom border-slate-100 flex gap-1 md:gap-2 overflow-x-auto no-scrollbar">
           {(['all-time', 'weekly', 'monthly'] as TimeFrame[]).map((frame) => (
             <button
               key={frame}
@@ -217,14 +217,14 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left table-fixed min-w-[320px]">
             <thead>
               <tr className="border-b border-slate-50 bg-slate-50/30">
-                <th className="px-6 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Hạng</th>
-                <th className="px-4 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Thí sinh</th>
-                <th className="px-4 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Thông tin</th>
-                <th className="px-4 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Điểm số</th>
-                <th className="px-6 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Thời gian</th>
+                <th className="w-[40px] px-1 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-tight">Hạng</th>
+                <th className="px-1 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-tight">Thí sinh</th>
+                <th className="w-[70px] md:w-[100px] px-1 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-tight">Lớp/Trường</th>
+                <th className="w-[40px] px-1 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-tight text-center">Điểm</th>
+                <th className="w-[50px] px-1 py-1.5 text-[8px] font-black text-slate-400 uppercase tracking-tight text-right">Giờ</th>
               </tr>
             </thead>
             <tbody>
@@ -232,12 +232,12 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
-                      <td colSpan={5} className="px-6 py-2 h-8 bg-slate-50/50 border-b border-slate-50"></td>
+                      <td colSpan={5} className="px-1 py-2 h-8 bg-slate-50/50 border-b border-slate-50"></td>
                     </tr>
                   ))
                 ) : results.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-8 py-20 text-center text-slate-400 font-bold italic">Chưa có kết quả nào trong thời gian này.</td>
+                    <td colSpan={5} className="px-1 py-20 text-center text-slate-400 font-bold italic text-[10px]">Chưa có kết quả nào.</td>
                   </tr>
                 ) : (
                   results.map((r: any, i) => (
@@ -248,46 +248,46 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
                       transition={{ delay: i * 0.05 }}
                       className={`group hover:bg-slate-50 border-b border-slate-50 transition-colors ${i < 3 ? 'bg-amber-50/10' : ''}`}
                     >
-                      <td className="px-6 py-1.5">
-                        <div className="flex items-center gap-2">
-                          {i === 0 && <Trophy size={14} className="text-amber-500" />}
-                          {i === 1 && <Medal size={14} className="text-slate-400" />}
-                          {i === 2 && <Medal size={14} className="text-amber-700" />}
-                          <span className={`font-black text-xs ${i < 3 ? 'text-slate-800' : 'text-slate-400'}`}>
+                      <td className="px-1 py-1.5">
+                        <div className="flex items-center justify-center gap-0.5">
+                          {i === 0 && <Trophy size={10} className="text-amber-500 shrink-0" />}
+                          {i === 1 && <Medal size={10} className="text-slate-400 shrink-0" />}
+                          {i === 2 && <Medal size={10} className="text-amber-700 shrink-0" />}
+                          <span className={`font-black text-[9px] ${i < 3 ? 'text-slate-800' : 'text-slate-400'}`}>
                              {i + 1}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-1.5">
-                        <div className="flex items-center gap-2.5">
-                           <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-[9px] shadow-inner shrink-0 ${
+                      <td className="px-1 py-1.5">
+                        <div className="flex items-center gap-1 min-w-0">
+                           <div className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[7px] shadow-inner shrink-0 ${
                              i === 0 ? 'bg-amber-500 text-white' : 
                              i === 1 ? 'bg-slate-400 text-white' :
                              i === 2 ? 'bg-amber-700 text-white' :
                              'bg-slate-100 text-slate-400'
                            }`}>
-                             {r.name.split(' ').pop()?.slice(0, 2).toUpperCase()}
+                             {r.name.split(' ').pop()?.slice(0, 1).toUpperCase()}
                            </div>
-                           <div>
-                             <div className="font-black text-slate-800 text-[11px] truncate max-w-[120px] md:max-w-none leading-tight">{r.name}</div>
-                             <div className="text-[8px] font-bold text-slate-400 flex items-center gap-1">
-                               <Clock size={7} /> {r.submittedAt instanceof Timestamp ? r.submittedAt.toDate().toLocaleDateString('vi-VN') : new Date(r.submittedAt).toLocaleDateString('vi-VN')}
+                           <div className="min-w-0">
+                             <div className="font-black text-slate-800 text-[9px] truncate leading-tight">{r.name}</div>
+                             <div className="text-[6px] font-bold text-slate-300 flex items-center gap-0.5 whitespace-nowrap">
+                               <Clock size={5} /> {r.submittedAt instanceof Timestamp ? r.submittedAt.toDate().toLocaleDateString('vi-VN') : new Date(r.submittedAt).toLocaleDateString('vi-VN')}
                              </div>
                            </div>
                         </div>
                       </td>
-                      <td className="px-4 py-1.5">
-                        <div className="flex flex-col">
-                          <span className="text-[9px] font-black text-slate-600 uppercase tracking-tight leading-tight">{r.class}</span>
-                          <span className="text-[8px] font-bold text-slate-400 truncate max-w-[100px] md:max-w-none">{r.school}</span>
+                      <td className="px-1 py-1.5">
+                        <div className="flex flex-col min-w-0">
+                           <span className="text-[8px] font-black text-slate-600 uppercase tracking-tight leading-tight truncate">{r.class}</span>
+                           <span className="text-[7px] font-bold text-slate-400 truncate tracking-tighter">{r.school}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-1.5 text-center">
-                        <div className="inline-flex items-center justify-center min-w-[45px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100 font-black text-[11px] shadow-sm">
-                          {r.score % 1 === 0 ? r.score : r.score.toFixed(2)}
+                      <td className="px-1 py-1.5 text-center">
+                        <div className="inline-flex items-center justify-center min-w-[30px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100 font-black text-[9px] shadow-sm">
+                          {r.score % 1 === 0 ? r.score : r.score.toFixed(1)}
                         </div>
                       </td>
-                      <td className="px-6 py-1.5 text-right font-mono text-[9px] font-bold text-slate-400 group-hover:text-slate-800 transition-colors">
+                      <td className="px-1 py-1.5 text-right font-mono text-[8px] font-bold text-slate-400 group-hover:text-slate-800 transition-colors">
                         {formatDuration(r.duration)}
                       </td>
                     </motion.tr>
