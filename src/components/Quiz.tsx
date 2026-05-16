@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { db, Question, QuizResult } from '../lib/firebase';
 import { collection, addDoc, getDocs, Timestamp, serverTimestamp, doc, getDoc, query, where, documentId } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, ChevronRight, ChevronLeft, Send, User } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ChevronLeft, Send, User, Trophy } from 'lucide-react';
 import MathText from './MathText';
 
-export default function Quiz({ onBack }: { onBack?: () => void }) {
+export default function Quiz({ onBack, onViewLeaderboard }: { onBack?: () => void, onViewLeaderboard?: () => void }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentStep, setCurrentStep] = useState<'info' | 'doing' | 'result' | 'review'>('info');
   const [studentInfo, setStudentInfo] = useState({ name: '', class: '', school: '' });
@@ -420,6 +420,12 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
               className="w-full md:w-auto px-8 py-4 md:py-5 bg-blue-600 text-white rounded-xl md:rounded-2xl font-black text-xs md:text-sm hover:bg-blue-700 transition shadow-xl shadow-blue-200 uppercase tracking-widest"
             >
               Xem lại bài làm
+            </button>
+            <button 
+              onClick={onViewLeaderboard}
+              className="w-full md:w-auto px-8 py-4 md:py-5 bg-amber-500 text-white rounded-xl md:rounded-2xl font-black text-xs md:text-sm hover:bg-amber-600 transition shadow-xl shadow-amber-100 uppercase tracking-widest flex items-center justify-center gap-2"
+            >
+              <Trophy size={16} /> Bảng xếp hạng
             </button>
             <button 
               onClick={() => {
