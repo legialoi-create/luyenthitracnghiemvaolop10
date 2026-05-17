@@ -163,6 +163,10 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
       setLastUpdated(now);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
+      const isQuotaError = (error as any)?.message?.toLowerCase().includes('quota') || (error as any)?.code === 'resource-exhausted';
+      if (isQuotaError) {
+        alert("Hệ thống đã hết dung lượng hôm nay, hẹn bạn vào lại lúc 14 h nhé");
+      }
     } finally {
       setLoading(false);
     }
