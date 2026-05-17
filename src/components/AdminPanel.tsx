@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, Question, QuizResult } from '../lib/firebase';
-import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch, updateDoc, setDoc, getDoc, limit } from 'firebase/firestore';
 import { Trash2, Plus, RefreshCw, LogOut, FileText, BarChart2, Settings, FileJson, FileCode, FileType, Download, Edit2 } from 'lucide-react';
 import MathText from './MathText';
 import * as XLSX from 'xlsx';
@@ -40,7 +40,13 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
       const snapshot = await getDocs(q);
       const qs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
       setQuestions(qs);
-      syncMetadata(qs);
+      
+      // Only sync metadata if it seems missing or we explicitly want to
+      // (Let's check if it exists first to save writes)
+      const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
+      if (!metaDoc.exists()) {
+        syncMetadata(qs);
+      }
     } catch (e) {
       console.log("Ordered fetch failed, falling back to simple fetch:", e);
       try {
@@ -58,7 +64,11 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
           return getTime(b.createdAt) - getTime(a.createdAt);
         });
         setQuestions(qs);
-        syncMetadata(qs);
+        
+        const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
+        if (!metaDoc.exists()) {
+          syncMetadata(qs);
+        }
       } catch (err2) {
         console.error("Critical error fetching questions:", err2);
       }
@@ -73,7 +83,9 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
         'Thống kê và Xác suất': qs.filter((q) => q.category === 'Thống kê và Xác suất').map((q) => q.id),
       };
       await setDoc(doc(db, 'metadata', 'questions'), lists);
+      localStorage.removeItem('quiz_metadata_ids'); // Clear cache so changes reflect
       console.log('Metadata synced with', qs.length, 'questions');
+      alert('Đã đồng bộ hóa danh mục câu hỏi (Metadata) thành công!');
     } catch (err) {
       console.error("Failed to sync metadata:", err);
     }
@@ -81,7 +93,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
 
   const fetchResults = async () => {
     try {
-      const q = query(collection(db, 'results'), orderBy('submittedAt', 'desc'));
+      const q = query(collection(db, 'results'), orderBy('submittedAt', 'desc'), limit(200));
       const snapshot = await getDocs(q);
       setResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizResult)));
     } catch (e) {
@@ -656,6 +668,13 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                       </button>
                       <button onClick={() => handleQuickEditAnswers()} className="bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1.5 hover:bg-emerald-700 shadow shadow-emerald-200 transition shrink-0">
                         <Edit2 size={14} /> Sửa đáp án {filterCategory !== 'Tất cả' ? `(${filterCategory.split(' ')[0]})` : ''}
+                      </button>
+                      <button 
+                        onClick={() => syncMetadata(questions)}
+                        title="Đồng bộ Metadata (Tối ưu tải trang)"
+                        className="px-2.5 py-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 font-bold text-[10px] flex items-center gap-1.5"
+                      >
+                        <RefreshCw size={14} /> Đồng bộ
                       </button>
                       <div className="flex bg-slate-100 p-0.5 rounded-lg shrink-0">
                         {['Tất cả', 'Số và Đại số', 'Hình học và Đo lường', 'Thống kê và Xác suất'].map(cat => (

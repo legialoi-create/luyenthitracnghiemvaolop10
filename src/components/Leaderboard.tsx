@@ -66,7 +66,7 @@ export default function Leaderboard({ onBack, hideHeader = false }: LeaderboardP
 
   const fetchResults = async (frame: TimeFrame) => {
     const normalize = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
-    const CACHE_TIME = 2 * 60 * 60 * 1000; // 2 hours in ms
+    const CACHE_TIME = 4 * 60 * 60 * 1000; // 4 hours in ms
 
     setLoading(true);
     try {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, Question, QuizResult } from '../lib/firebase';
-import { collection, addDoc, getDocs, Timestamp, serverTimestamp, doc, getDoc, query, where, documentId } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp, serverTimestamp, doc, getDoc, query, where, documentId, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, ChevronRight, ChevronLeft, Send, User, Trophy } from 'lucide-react';
 import MathText from './MathText';
@@ -18,16 +18,42 @@ export default function Quiz({ onBack, onViewLeaderboard }: { onBack?: () => voi
 
   const fetchAndRandomize = async () => {
     try {
-      // 1. Fetch metadata holding IDs
-      const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
+      // 1. Fetch metadata holding IDs (with local cache to save reads)
+      const CACHE_KEY = 'quiz_metadata_ids';
+      const CACHE_TIME = 24 * 60 * 60 * 1000; // 24 hours
+      let lists: any = null;
+
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_TIME) {
+          lists = data;
+        }
+      }
+
+      if (!lists) {
+        const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
+        if (metaDoc.exists()) {
+          lists = metaDoc.data();
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: lists, timestamp: Date.now() }));
+        }
+      }
+
       let selectedIds: string[] = [];
-      let lists: any = {};
       
-      if (metaDoc.exists()) {
-        lists = metaDoc.data();
-        const algIds = (lists['Số và Đại số'] || []).sort(() => 0.5 - Math.random()).slice(0, 8);
-        const geoIds = (lists['Hình học và Đo lường'] || []).sort(() => 0.5 - Math.random()).slice(0, 6);
-        const statIds = (lists['Thống kê và Xác suất'] || []).sort(() => 0.5 - Math.random()).slice(0, 2);
+      const shuffle = (array: any[]) => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+
+      if (lists) {
+        const algIds = shuffle(lists['Số và Đại số'] || []).slice(0, 8);
+        const geoIds = shuffle(lists['Hình học và Đo lường'] || []).slice(0, 6);
+        const statIds = shuffle(lists['Thống kê và Xác suất'] || []).slice(0, 2);
         selectedIds = [...algIds, ...geoIds, ...statIds];
       }
       
@@ -49,18 +75,20 @@ export default function Quiz({ onBack, onViewLeaderboard }: { onBack?: () => voi
       }
 
       if (allSelected.length === 0) {
-        console.warn("Metadata empty or out of sync, falling back to full fetch");
-        const fullSnapshot = await getDocs(collection(db, 'questions'));
+        console.warn("Metadata empty or out of sync, falling back to limited fetch");
+        // Limit to 100 to save reads if metadata is missing
+        const qSample = query(collection(db, 'questions'), limit(100));
+        const fullSnapshot = await getDocs(qSample);
         let all = fullSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
         if (all.length === 0) throw new Error("Ngân hàng câu hỏi trống.");
         
-        const algebra = all.filter(q => q.category === 'Số và Đại số').sort(() => 0.5 - Math.random()).slice(0, 8);
-        const geometry = all.filter(q => q.category === 'Hình học và Đo lường').sort(() => 0.5 - Math.random()).slice(0, 6);
-        const stats = all.filter(q => q.category === 'Thống kê và Xác suất').sort(() => 0.5 - Math.random()).slice(0, 2);
+        const algebra = shuffle(all.filter(q => q.category === 'Số và Đại số')).slice(0, 8);
+        const geometry = shuffle(all.filter(q => q.category === 'Hình học và Đo lường')).slice(0, 6);
+        const stats = shuffle(all.filter(q => q.category === 'Thống kê và Xác suất')).slice(0, 2);
         allSelected = [...algebra, ...geometry, ...stats];
       }
 
-      setQuestions(allSelected.sort(() => 0.5 - Math.random()));
+      setQuestions(shuffle(allSelected));
       return true;
     } catch (error) {
       console.error("Error fetching questions:", error);
