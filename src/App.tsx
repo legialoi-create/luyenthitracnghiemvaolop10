@@ -121,16 +121,16 @@ export default function App() {
 
         {view === 'quiz' && (
           <motion.div key="quiz" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen bg-[#f0f4f8]">
-            <nav className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">Σ</div>
-                <span className="text-lg font-bold tracking-tight text-slate-800">LUYỆN THI <span className="text-blue-600">LÊ LỢI</span></span>
+            <nav className="h-14 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-base">Σ</div>
+                <span className="text-base font-bold tracking-tight text-slate-800">LUYỆN THI <span className="text-blue-600">LÊ LỢI</span></span>
               </div>
-              <button onClick={() => setView('landing')} className="text-slate-400 hover:text-blue-600 font-bold text-sm flex items-center gap-2 transition-colors">
+              <button onClick={() => setView('landing')} className="text-slate-400 hover:text-blue-600 font-bold text-[10px] md:text-sm flex items-center gap-2 transition-colors">
                 ← THOÁT
               </button>
             </nav>
-            <div className="p-4 md:p-8">
+            <div className="p-1 md:p-4 pb-10">
               <Quiz 
                 onBack={() => setView('landing')} 
                 onViewLeaderboard={() => setView('leaderboard')}
