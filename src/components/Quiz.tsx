@@ -20,14 +20,15 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
     try {
       // 1. Fetch metadata holding IDs (with local cache to save reads)
       const CACHE_KEY = 'quiz_metadata_ids';
-      const CACHE_TIME = 24 * 60 * 60 * 1000; // 24 hours
       let lists: any = null;
 
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_TIME) {
+        try {
+          const { data } = JSON.parse(cached);
           lists = data;
+        } catch (e) {
+          localStorage.removeItem(CACHE_KEY);
         }
       }
 
