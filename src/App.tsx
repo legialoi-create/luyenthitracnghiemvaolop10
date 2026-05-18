@@ -6,8 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import Quiz from './components/Quiz';
 import AdminPanel from './components/AdminPanel';
-import Leaderboard from './components/Leaderboard';
-import { Lock, GraduationCap, ArrowRight, Trophy } from 'lucide-react';
+import { Lock, GraduationCap, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth } from './lib/firebase';
 
@@ -20,7 +19,7 @@ async function hashSecret(text: string) {
 }
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login' | 'leaderboard'>('landing');
+  const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login'>('landing');
   const [adminCreds, setAdminCreds] = useState({ user: '', pass: '' });
   useEffect(() => {
     // Kiểm tra session cục bộ (local)
@@ -100,16 +99,6 @@ export default function App() {
                   </div>
                 </button>
               </div>
-
-              <div className="pt-2 border-t border-slate-200/50">
-                <div className="text-center mb-1">
-                  <h3 className="text-base font-black text-slate-800 flex items-center justify-center gap-2">
-                    <Trophy className="text-amber-500" size={18} />
-                    BẢNG XẾP HẠNG
-                  </h3>
-                </div>
-                <Leaderboard onBack={() => {}} hideHeader />
-              </div>
             </div>
             
             <footer className="mt-8 text-slate-400 text-[10px] md:text-sm font-medium flex items-center gap-2">
@@ -133,25 +122,7 @@ export default function App() {
             <div className="p-1 md:p-4 pb-10">
               <Quiz 
                 onBack={() => setView('landing')} 
-                onViewLeaderboard={() => setView('leaderboard')}
               />
-            </div>
-          </motion.div>
-        )}
-
-        {view === 'leaderboard' && (
-          <motion.div key="leaderboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen bg-[#f0f4f8]">
-            <nav className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">Σ</div>
-                <span className="text-lg font-bold tracking-tight text-slate-800">LUYỆN THI <span className="text-blue-600">LÊ LỢI</span></span>
-              </div>
-              <button onClick={() => setView('landing')} className="text-slate-400 hover:text-blue-600 font-bold text-sm flex items-center gap-2 transition-colors">
-                ← QUAY LẠI
-              </button>
-            </nav>
-            <div className="p-4 md:p-8">
-              <Leaderboard onBack={() => setView('landing')} />
             </div>
           </motion.div>
         )}
