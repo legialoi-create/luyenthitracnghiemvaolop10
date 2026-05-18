@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, ChevronRight, ChevronLeft, Send, User, Trophy } from 'lucide-react';
 import MathText from './MathText';
 
-export default function Quiz({ onBack, onViewLeaderboard }: { onBack?: () => void, onViewLeaderboard?: () => void }) {
+export default function Quiz({ onBack }: { onBack?: () => void }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentStep, setCurrentStep] = useState<'info' | 'doing' | 'result' | 'review'>('info');
   const [studentInfo, setStudentInfo] = useState({ name: '', class: '', school: '' });
@@ -447,12 +447,6 @@ export default function Quiz({ onBack, onViewLeaderboard }: { onBack?: () => voi
               className="px-4 py-3 md:py-4 bg-blue-600 text-white rounded-lg md:rounded-xl font-black text-[10px] md:text-xs hover:bg-blue-700 transition shadow-lg shadow-blue-100 uppercase tracking-wider"
             >
               Xem lại bài
-            </button>
-            <button 
-              onClick={onViewLeaderboard}
-              className="px-4 py-3 md:py-4 bg-amber-500 text-white rounded-lg md:rounded-xl font-black text-[10px] md:text-xs hover:bg-amber-600 transition shadow-lg shadow-amber-100 uppercase tracking-wider flex items-center justify-center gap-1.5"
-            >
-              <Trophy size={12} /> Bảng điểm
             </button>
             <button 
               onClick={() => {
