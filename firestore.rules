@@ -32,6 +32,10 @@ service cloud.firestore {
       allow create, update, delete: if true; // Relaxed for troubleshooting
     }
 
+    match /metadata/{document} {
+      allow read, write: if true;
+    }
+
     // Validation for Results
     function isValidResult(data) {
       return data.name is string && data.name.size() <= 100 &&
@@ -42,10 +46,15 @@ service cloud.firestore {
     }
 
     match /results/{resultId} {
-      allow list: if isAdmin();
-      allow get: if isAdmin();
+      allow list: if true; // Allow students to see leaderboard
+      allow get: if true;
       allow create: if isValidResult(incoming());
       allow delete: if isAdmin();
+    }
+
+    match /leaderboard_cache/{type} {
+      allow read: if true;
+      allow write: if true;
     }
   }
 }

@@ -1,6 +1,6 @@
 {
-  "name": "LUYỆN THI LÊ LỢI",
+  "name": "Remix: LUYỆN THI LÊ LỢI",
   "description": "Hệ thống luyện thi trắc nghiệm vào lớp 10 theo cấu trúc SGD Quảng Trị",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
