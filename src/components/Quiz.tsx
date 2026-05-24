@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, Question, QuizResult } from '../lib/firebase';
+import { db, Question, QuizResult, OperationType, handleFirestoreError } from '../lib/firebase';
 import { collection, addDoc, getDocs, Timestamp, serverTimestamp, doc, getDoc, query, where, documentId, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, ChevronRight, ChevronLeft, Send, User, Trophy } from 'lucide-react';
@@ -18,7 +18,22 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
 
   const fetchAndRandomize = async () => {
     try {
-      // 1. Fetch metadata holding IDs (with local cache to save reads)
+      // 1. Check Session Cache for current questions (Prevents F5 from consuming quota)
+      const SESSION_CACHE_KEY = 'quiz_current_questions_session';
+      const sessionCached = sessionStorage.getItem(SESSION_CACHE_KEY);
+      if (sessionCached) {
+        try {
+          const cachedQs = JSON.parse(sessionCached);
+          if (Array.isArray(cachedQs) && cachedQs.length > 0) {
+            setQuestions(cachedQs);
+            return true;
+          }
+        } catch (e) {
+          sessionStorage.removeItem(SESSION_CACHE_KEY);
+        }
+      }
+
+      // 2. Fetch metadata holding IDs (with permanent local cache)
       const CACHE_KEY = 'quiz_metadata_ids';
       let lists: any = null;
 
@@ -33,10 +48,15 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
       }
 
       if (!lists) {
-        const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
-        if (metaDoc.exists()) {
-          lists = metaDoc.data();
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: lists, timestamp: Date.now() }));
+        try {
+          const metaDoc = await getDoc(doc(db, 'metadata', 'questions'));
+          if (metaDoc.exists()) {
+            lists = metaDoc.data();
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ data: lists, timestamp: Date.now() }));
+          }
+        } catch (err) {
+          console.warn("Failed to fetch metadata from server:", err);
+          // If we fail here, we'll fall back to full sampled fetch later
         }
       }
 
@@ -69,9 +89,13 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
         
         for (const chunk of chunks) {
            if(chunk.length === 0) continue;
-           const q = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
-           const snapshot = await getDocs(q);
-           allSelected = allSelected.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
+           try {
+             const q = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
+             const snapshot = await getDocs(q);
+             allSelected = allSelected.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
+           } catch (err) {
+              console.error(`Error fetching chunk ${chunk}:`, err);
+           }
         }
       }
 
@@ -89,13 +113,22 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
         allSelected = [...algebra, ...geometry, ...stats];
       }
 
-      setQuestions(shuffle(allSelected));
+      const finalQuestions = shuffle(allSelected);
+      setQuestions(finalQuestions);
+      
+      // Save to session storage so F5 doesn't re-fetch
+      sessionStorage.setItem('quiz_current_questions_session', JSON.stringify(finalQuestions));
+      
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching questions:", error);
-      const isQuotaError = (error as any)?.message?.toLowerCase().includes('quota') || (error as any)?.code === 'resource-exhausted';
+      const isQuotaError = error?.message?.toLowerCase().includes('quota') || error?.code === 'resource-exhausted';
+      const isOfflineError = error?.message?.toLowerCase().includes('offline');
+      
       if (isQuotaError) {
-        alert("Hệ thống đã hết dung lượng hôm nay, hẹn bạn vào lại lúc 14 h nhé");
+        alert("Hệ thống đã hết dung lượng hôm nay, hẹn bạn vào lại lúc 14h nhé");
+      } else if (isOfflineError) {
+        alert("Hiện không thể kết nối tới máy chủ (Offline). Vui lòng kiểm tra kết nối mạng hoặc quay lại sau.");
       } else {
         alert("Lỗi khi tải câu hỏi: " + (error as Error).message);
       }
@@ -451,6 +484,7 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
             </button>
             <button 
               onClick={() => {
+                sessionStorage.removeItem('quiz_current_questions_session');
                 setStudentInfo({ name: '', class: '', school: '' });
                 setUserAnswers({});
                 setCurrentIndex(0);

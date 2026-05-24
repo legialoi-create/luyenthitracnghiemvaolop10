@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { db, Question, QuizResult } from '../lib/firebase';
+import { db, Question, QuizResult, OperationType, handleFirestoreError } from '../lib/firebase';
 import { collection, addDoc, getDocs, query, deleteDoc, doc, Timestamp, orderBy, writeBatch, updateDoc, setDoc, getDoc, limit } from 'firebase/firestore';
 import { Trash2, Plus, RefreshCw, LogOut, FileText, BarChart2, Settings, FileJson, FileCode, FileType, Download, Edit2 } from 'lucide-react';
 import MathText from './MathText';
 import * as XLSX from 'xlsx';
-import { parseWordToQuiz, ParsedQuestion } from '../utils/wordParser';
+import { parseWordToQuiz, parseJsonToQuiz, parseTextToQuiz, ParsedQuestion } from '../utils/wordParser';
 import QuizPreview from './QuizPreview';
 import { solveQuestion } from '../services/geminiService';
 
@@ -71,6 +71,10 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
         }
       } catch (err2) {
         console.error("Critical error fetching questions:", err2);
+        const isOffline = (err2 as any)?.message?.toLowerCase().includes('offline');
+        if (isOffline) {
+          alert("Không thể kết nối tới Firebase (Offline). Vui lòng kiểm tra cấu hình dự án hoặc kết nối mạng.");
+        }
       }
     }
   };
@@ -256,8 +260,16 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
     setLoading(false);
   };
 
+  const [confirmDeleteResults, setConfirmDeleteResults] = useState(false);
+  const [confirmDeleteResultId, setConfirmDeleteResultId] = useState<string | null>(null);
+
   const handleDeleteResults = async () => {
-    if (!confirm('Xóa toàn bộ dữ liệu điểm của học sinh?')) return;
+    if (!confirmDeleteResults) {
+      setConfirmDeleteResults(true);
+      setTimeout(() => setConfirmDeleteResults(false), 3000);
+      return;
+    }
+    
     setLoading(true);
     try {
       const snapshot = await getDocs(collection(db, 'results'));
@@ -271,6 +283,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
         }
       }
       setResults([]);
+      setConfirmDeleteResults(false);
       await fetchResults();
       alert('Đã reset bảng thống kê!');
     } catch (e) {
@@ -280,11 +293,17 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
   };
 
   const handleDeleteResult = async (id: string) => {
-    if (!confirm('Xóa kết quả thi của học sinh này?')) return;
+    if (confirmDeleteResultId !== id) {
+      setConfirmDeleteResultId(id);
+      setTimeout(() => setConfirmDeleteResultId(null), 3000);
+      return;
+    }
+
     setLoading(true);
     try {
       await deleteDoc(doc(db, 'results', id));
       setResults(prev => prev.filter(r => r.id !== id));
+      setConfirmDeleteResultId(null);
       alert('Đã xóa kết quả!');
     } catch (e) {
       alert('Lỗi khi xóa kết quả.');
@@ -309,20 +328,28 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
       setLoading(true);
       try {
         let allParsed: ParsedQuestion[] = [];
+        let allErrors: string[] = [];
         for (const file of selectedFiles as File[]) {
-          const parsed = await parseWordToQuiz(file, category);
-          allParsed = [...allParsed, ...parsed];
+          const result = await parseWordToQuiz(file, category);
+          allParsed = [...allParsed, ...result.questions];
+          if (result.errors.length > 0) {
+            allErrors = [...allErrors, ...result.errors.map(err => `[${file.name}] ${err}`)];
+          }
         }
         
         if (allParsed.length > 0) {
           setPreviewQuestions(allParsed);
           setShowPreview(true);
+          if (allErrors.length > 0) {
+            console.warn("Parsing errors:", allErrors);
+            alert(`Xử lý xong ${allParsed.length} câu. Có ${allErrors.length} lỗi/cảnh báo được phát hiện. Vui lòng kiểm tra kỹ trong bản xem trước.`);
+          }
         } else {
-          alert('Không tìm thấy câu hỏi nào trong các file đã chọn.');
+          alert('Không tìm thấy câu hỏi nào hợp lệ trong các file đã chọn.');
         }
       } catch (err) {
         console.error(err);
-        alert('Lỗi xử lý một hoặc nhiều file Word.');
+        alert('Lỗi hệ thống khi xử lý file Word.');
       }
       setLoading(false);
     };
@@ -426,37 +453,30 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
       setLoading(true);
       try {
         let allParsed: ParsedQuestion[] = [];
+        let allErrors: string[] = [];
         for (const file of selectedFiles as File[]) {
-          const text = await file.text();
-          let parsed: ParsedQuestion[] = [];
+          const result = type === 'json' 
+            ? await parseJsonToQuiz(file, category) 
+            : await parseTextToQuiz(file, category);
           
-          if (type === 'json') {
-            parsed = JSON.parse(text).map((q: any) => ({ ...q, category }));
-          } else {
-            // Xử lý TXT đơn giản theo dòng
-            const lines = text.split('\n').filter(l => l.trim());
-            for (let i = 0; i < lines.length; i += 6) {
-               if (lines[i]) {
-                  parsed.push({
-                     content: lines[i],
-                     options: [lines[i+1], lines[i+4] ? lines[i+2] : '', lines[i+4] ? lines[i+3] : '', lines[i+4] ? lines[i+4] : ''], // Basic guard
-                     correctAnswer: parseInt(lines[i+5]) || 0,
-                     category
-                  });
-               }
-            }
+          allParsed = [...allParsed, ...result.questions];
+          if (result.errors.length > 0) {
+            allErrors = [...allErrors, ...result.errors.map(err => `[${file.name}] ${err}`)];
           }
-          allParsed = [...allParsed, ...parsed];
         }
         
         if (allParsed.length > 0) {
           setPreviewQuestions(allParsed);
           setShowPreview(true);
+          if (allErrors.length > 0) {
+            console.warn("File parsing errors:", allErrors);
+            alert(`Xử lý xong ${allParsed.length} mục. Phát hiện ${allErrors.length} lỗi. Vui lòng kiểm tra lại dữ liệu.`);
+          }
         } else {
           alert('Không tìm thấy dữ liệu hợp lệ trong các file đã chọn.');
         }
       } catch (err) {
-        alert('Lỗi xử lý file.');
+        alert('Lỗi hệ thống khi xử lý file.');
       }
       setLoading(false);
     };
@@ -893,7 +913,16 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                           <button onClick={handleExportExcel} className="px-2 py-1 bg-blue-50 text-blue-600 font-bold text-[8px] rounded-md hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest border border-blue-100 flex items-center gap-1">
                              <Download size={10} /> Excel
                           </button>
-                          <button onClick={handleDeleteResults} className="px-2 py-1 bg-red-50 text-red-500 font-bold text-[8px] rounded-md hover:bg-red-500 hover:text-white transition-all uppercase tracking-widest border border-red-100">Xóa bài thi</button>
+                          <button 
+                             onClick={handleDeleteResults} 
+                             className={`px-2 py-1 font-bold text-[8px] rounded-md transition-all uppercase tracking-widest border ${
+                               confirmDeleteResults 
+                                 ? 'bg-red-600 text-white border-red-600 animate-pulse' 
+                                 : 'bg-red-50 text-red-500 border-red-100 hover:bg-red-500 hover:text-white'
+                             }`}
+                           >
+                             {confirmDeleteResults ? 'Xác nhận?' : 'Xóa bài thi'}
+                           </button>
                        </div>
                     </div>
                  </div>
@@ -933,7 +962,7 @@ export default function AdminPanel({ onLogout }: { onLogout: () => void }) {
                                <td className="pr-2 text-center">
                                   <button 
                                     onClick={() => handleDeleteResult(r.id!)}
-                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                                    className={`p-1 rounded-md transition-all ${confirmDeleteResultId === r.id ? 'bg-red-500 text-white' : 'text-slate-300 hover:text-red-500'}`}
                                     title="Xoá kết quả"
                                   >
                                     <Trash2 size={12} />

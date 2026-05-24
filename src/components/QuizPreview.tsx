@@ -16,6 +16,8 @@ interface QuizPreviewProps {
 export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQuestion, onDeleteQuestion, loading }: QuizPreviewProps) {
   const [editStates, setEditStates] = React.useState<Record<number, 'none' | 'content' | 'options'>>({});
 
+  const [confirmDeleteIdx, setConfirmDeleteIdx] = React.useState<number | null>(null);
+
   const toggleEdit = (idx: number) => {
     setEditStates(prev => {
       const current = prev[idx] || 'none';
@@ -25,6 +27,16 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
       else next = 'none';
       return { ...prev, [idx]: next };
     });
+  };
+
+  const handleDelete = (idx: number) => {
+    if (confirmDeleteIdx === idx) {
+      onDeleteQuestion?.(idx);
+      setConfirmDeleteIdx(null);
+    } else {
+      setConfirmDeleteIdx(idx);
+      setTimeout(() => setConfirmDeleteIdx(null), 3000);
+    }
   };
 
   return (
@@ -85,21 +97,24 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
                             {state === 'content' ? 'Sửa nội dung' : 'Sửa đáp án'}
                           </span>
                         )}
+                        {q.validationError && (
+                          <span className="px-2 py-1 bg-red-100 text-red-600 text-[8px] md:text-[10px] font-black rounded-lg border border-red-200 uppercase flex items-center gap-1">
+                            <X size={10} /> {q.validationError}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
                         {onDeleteQuestion && (
                           <button
-                            onClick={() => {
-                              if (window.confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) {
-                                onDeleteQuestion(idx);
-                              }
-                            }}
-                            className="p-2 rounded-xl transition-all flex items-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700"
+                            onClick={() => handleDelete(idx)}
+                            className={`p-2 rounded-xl transition-all flex items-center gap-2 ${confirmDeleteIdx === idx ? 'bg-red-600 text-white shadow-lg animate-pulse' : 'bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700'}`}
                             title="Xóa câu hỏi này"
                           >
                             <Trash2 size={18} />
-                            <span className="text-[10px] font-bold uppercase hidden md:inline">Xóa</span>
+                            <span className="text-[10px] font-bold uppercase hidden md:inline">
+                              {confirmDeleteIdx === idx ? 'Xác nhận?' : 'Xóa'}
+                            </span>
                           </button>
                         )}
                         <button 
