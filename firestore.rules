@@ -24,7 +24,8 @@ service cloud.firestore {
              data.options is list && data.options.size() == 4 &&
              data.correctAnswer is int && data.correctAnswer >= 0 && data.correctAnswer <= 3 &&
              data.category in ["Số và Đại số", "Hình học và Đo lường", "Thống kê và Xác suất"] &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('chapter' in data) || data.chapter is string);
     }
 
     match /questions/{questionId} {
@@ -40,9 +41,13 @@ service cloud.firestore {
     function isValidResult(data) {
       return data.name is string && data.name.size() <= 100 &&
              data.class is string && data.class.size() <= 50 &&
-             data.score is number && data.score >= 0 && data.score <= 10 && // Allow up to 10 just in case, but usually 4
+             data.score is number && data.score >= 0 && data.score <= 10 &&
              data.startTime is timestamp &&
-             data.submittedAt == request.time;
+             data.submittedAt == request.time &&
+             data.correctCount is int &&
+             data.totalQuestions is int &&
+             data.chapter is string &&
+             (!('school' in data) || data.school is string);
     }
 
     match /results/{resultId} {
@@ -55,6 +60,10 @@ service cloud.firestore {
     match /leaderboard_cache/{type} {
       allow read: if true;
       allow write: if true;
+    }
+
+    match /class_rosters/{rosterId} {
+      allow read, write: if true;
     }
   }
 }
