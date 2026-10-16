@@ -1,42 +1,123 @@
-import React, { useState, useEffect } from 'react';
-import { db, Question, QuizResult, OperationType, handleFirestoreError } from '../lib/firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { db, Question, QuizResult, ClassRoster, handleFirestoreError, OperationType, PART_CHAPTERS, SCHOOL_CLASSES } from '../lib/firebase';
 import { collection, addDoc, getDocs, Timestamp, serverTimestamp, doc, getDoc, query, where, documentId, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, ChevronRight, ChevronLeft, Send, User, Trophy } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ChevronLeft, Send, User, Trophy, BookOpen, Award, Bookmark, ArrowRight, School, GraduationCap, Users, ChevronDown, Check, Sparkles } from 'lucide-react';
 import MathText from './MathText';
+import { getRosterSuggestions, matchResultToRoster } from '../utils/nameMatcher';
 
-export default function Quiz({ onBack }: { onBack?: () => void }) {
+export default function Quiz({ 
+  onBack, 
+  isQuickPractice = false,
+  quickPracticeChapter = 'all'
+}: { 
+  onBack?: () => void; 
+  isQuickPractice?: boolean;
+  quickPracticeChapter?: string;
+}) {
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentStep, setCurrentStep] = useState<'info' | 'doing' | 'result' | 'review'>('info');
-  const [studentInfo, setStudentInfo] = useState({ name: '', class: '', school: '' });
+  const [currentStep, setCurrentStep] = useState<'info' | 'select_chapter' | 'doing' | 'result' | 'review'>('info');
+  const [studentInfo, setStudentInfo] = useState({ name: '', class: '9A8', school: 'THCS Nam Cửa Việt' });
+  const [classRoster, setClassRoster] = useState<string[]>([]);
+  const [isRosterLoading, setIsRosterLoading] = useState(false);
+  const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const nameDropdownRef = useRef<HTMLDivElement>(null);
+  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<string>('');
+  const [selectedChapDropdown, setSelectedChapDropdown] = useState<string>('');
 
-  const fetchAndRandomize = async () => {
-    try {
-      // 1. Check Session Cache for current questions (Prevents F5 from consuming quota)
-      const SESSION_CACHE_KEY = 'quiz_current_questions_session';
-      const sessionCached = sessionStorage.getItem(SESSION_CACHE_KEY);
-      if (sessionCached) {
-        try {
-          const cachedQs = JSON.parse(sessionCached);
-          if (Array.isArray(cachedQs) && cachedQs.length > 0) {
-            setQuestions(cachedQs);
-            return true;
-          }
-        } catch (e) {
-          sessionStorage.removeItem(SESSION_CACHE_KEY);
-        }
+  // Close name dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (nameDropdownRef.current && !nameDropdownRef.current.contains(event.target as Node)) {
+        setShowNameDropdown(false);
       }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-      // 2. Fetch metadata holding IDs (with permanent local cache)
+  // Fetch class roster dynamically whenever school or class changes
+  useEffect(() => {
+    if (!studentInfo.school || !studentInfo.class) {
+      setClassRoster([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchRoster = async () => {
+      setIsRosterLoading(true);
+      try {
+        const rosterDocId = `roster_${studentInfo.school.trim().replace(/\s+/g, '_')}_${studentInfo.class.trim().replace(/\s+/g, '_')}`;
+        const rosterSnap = await getDoc(doc(db, 'class_rosters', rosterDocId));
+
+        if (rosterSnap.exists()) {
+          const data = rosterSnap.data() as ClassRoster;
+          if (isMounted && data.students && data.students.length > 0) {
+            setClassRoster(data.students.sort((a, b) => a.localeCompare(b, 'vi')));
+            setIsRosterLoading(false);
+            return;
+          }
+        }
+
+        // Fallback: Query results for past students from this school & class
+        const q = query(
+          collection(db, 'results'),
+          where('class', '==', studentInfo.class)
+        );
+        const resultsSnap = await getDocs(q);
+        const fetchedResults = resultsSnap.docs
+          .map(d => d.data())
+          .filter(r => !studentInfo.school || r.school === studentInfo.school || !r.school);
+        const distinctNames = Array.from<string>(
+          new Set(fetchedResults.map(r => (r.name || '').trim()).filter(Boolean))
+        );
+
+        if (isMounted) {
+          setClassRoster(distinctNames.sort((a, b) => a.localeCompare(b, 'vi')));
+        }
+      } catch (err) {
+        console.error('Error loading class roster:', err);
+      } finally {
+        if (isMounted) setIsRosterLoading(false);
+      }
+    };
+
+    fetchRoster();
+    return () => {
+      isMounted = false;
+    };
+  }, [studentInfo.school, studentInfo.class]);
+
+  const fetchAndRandomize = async (chap?: string, isPractice = false) => {
+    setLoadingQuestions(true);
+    try {
+      // Clear previous cached session questions
+      sessionStorage.removeItem('quiz_current_questions_session');
+
+      const shuffle = (array: any[]) => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+
+      let finalQuestions: Question[] = [];
+
+      // 1. Cố gắng lấy danh mục câu hỏi (ID, chương, phân môn) từ metadata để tiết kiệm lượt đọc
+      let allQsMetaData: { id: string; chapter: string; category: string }[] = [];
       const CACHE_KEY = 'quiz_metadata_ids';
       let lists: any = null;
-
+      
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         try {
@@ -54,81 +135,294 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
             lists = metaDoc.data();
             localStorage.setItem(CACHE_KEY, JSON.stringify({ data: lists, timestamp: Date.now() }));
           }
-        } catch (err) {
-          console.warn("Failed to fetch metadata from server:", err);
-          // If we fail here, we'll fall back to full sampled fetch later
+        } catch (e) {
+          handleFirestoreError(e, OperationType.GET, 'metadata/questions');
         }
       }
 
-      let selectedIds: string[] = [];
-      
-      const shuffle = (array: any[]) => {
-        const arr = [...array];
-        for (let i = arr.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        return arr;
-      };
-
-      if (lists) {
-        const algIds = shuffle(lists['Số và Đại số'] || []).slice(0, 8);
-        const geoIds = shuffle(lists['Hình học và Đo lường'] || []).slice(0, 6);
-        const statIds = shuffle(lists['Thống kê và Xác suất'] || []).slice(0, 2);
-        selectedIds = [...algIds, ...geoIds, ...statIds];
+      if (lists && lists.allQuestions && lists.allQuestions.length > 0) {
+        allQsMetaData = lists.allQuestions;
       }
-      
-      let allSelected: Question[] = [];
-      
-      if (selectedIds.length > 0) {
-        // 2. Fetch only selected docs in chunks of 10
-        const chunks = [];
-        for(let i = 0; i < selectedIds.length; i += 10) {
-            chunks.push(selectedIds.slice(i, i + 10));
+
+      if (isPractice) {
+        // Mode Quick Practice: Lấy ngẫu nhiên đúng 16 câu hỏi từ metadata
+        let selectedIds: string[] = [];
+        if (allQsMetaData.length > 0) {
+          const filteredMeta = chap && chap !== 'all'
+            ? allQsMetaData.filter(q => q.chapter?.trim() === chap.trim())
+            : allQsMetaData;
+          
+          selectedIds = shuffle(filteredMeta.map(q => q.id)).slice(0, 16);
         }
-        
-        for (const chunk of chunks) {
-           if(chunk.length === 0) continue;
-           try {
+
+        let practiceQs: Question[] = [];
+        if (selectedIds.length > 0) {
+          // Lấy đúng 16 câu hỏi chi tiết qua một câu truy vấn duy nhất hoặc chia chunks vì 'in' tối đa 10 phần tử
+          const chunks = [];
+          for(let i = 0; i < selectedIds.length; i += 10) {
+              chunks.push(selectedIds.slice(i, i + 10));
+          }
+          for (const chunk of chunks) {
+             if(chunk.length === 0) continue;
              const q = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
-             const snapshot = await getDocs(q);
-             allSelected = allSelected.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
-           } catch (err) {
-              console.error(`Error fetching chunk ${chunk}:`, err);
-           }
+             try {
+               const snapshot = await getDocs(q);
+               practiceQs = practiceQs.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
+             } catch (e) {
+               handleFirestoreError(e, OperationType.GET, 'questions');
+             }
+          }
         }
-      }
 
-      if (allSelected.length === 0) {
-        console.warn("Metadata empty or out of sync, falling back to limited fetch");
-        // Limit to 100 to save reads if metadata is missing
-        const qSample = query(collection(db, 'questions'), limit(100));
-        const fullSnapshot = await getDocs(qSample);
-        let all = fullSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
-        if (all.length === 0) throw new Error("Ngân hàng câu hỏi trống.");
+        // Fallback: Nếu không có metadata/cache, tải trực tiếp bằng query theo chương (nếu chap specified) hoặc limit 40 chọn 16 câu
+        if (practiceQs.length === 0) {
+          console.log("Fallback: Tải ngẫu nhiên 16 câu từ questions...");
+          try {
+            let snapshot;
+            if (chap && chap !== 'all') {
+              snapshot = await getDocs(query(collection(db, 'questions'), where('chapter', '==', chap), limit(40)));
+            } else {
+              snapshot = await getDocs(query(collection(db, 'questions'), limit(40)));
+            }
+            const allFetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question));
+            practiceQs = shuffle(allFetched).slice(0, 16);
+          } catch (e) {
+            handleFirestoreError(e, OperationType.GET, 'questions');
+          }
+        }
+
+        if (practiceQs.length === 0) {
+          alert('Chương học được chọn hoặc Ngân hàng đề hiện chưa có câu hỏi để luyện tập.');
+          setLoadingQuestions(false);
+          return false;
+        }
+
+        finalQuestions = shuffle(practiceQs);
+      } else if (chap) {
+        // Mode A: selective review by chapter - Cực kỳ tối ưu nhờ metadata quét đúng ID
+        console.log(`Getting optimized questions for chapter: ${chap}`);
+        let selectedIds: string[] = [];
+
+        if (allQsMetaData.length > 0) {
+          // Lọc các ID câu hỏi thuộc chương được chọn
+          const chapQsMeta = allQsMetaData.filter(q => q.chapter?.trim() === chap.trim());
+          if (chapQsMeta.length > 0) {
+            selectedIds = shuffle(chapQsMeta.map(q => q.id)).slice(0, 16);
+          }
+        }
+
+        let chapQsDetail: Question[] = [];
+
+        // Nếu tìm được IDs chi tiết từ Metadata, ta chỉ tải đúng tối đa 16 câu hỏi đó
+        if (selectedIds.length > 0) {
+          const chunks = [];
+          for(let i = 0; i < selectedIds.length; i += 10) {
+              chunks.push(selectedIds.slice(i, i + 10));
+          }
+          
+          for (const chunk of chunks) {
+             if(chunk.length === 0) continue;
+             const q = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
+             try {
+               const snapshot = await getDocs(q);
+               chapQsDetail = chapQsDetail.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
+             } catch (e) {
+               handleFirestoreError(e, OperationType.GET, 'questions');
+             }
+          }
+        }
+
+        // Fallback an toàn: nếu metadata trống hoặc không tìm thấy câu hỏi tương ứng, tải trực tiếp bằng query 'where' theo chương
+        if (chapQsDetail.length === 0) {
+          console.log("Fallback: Querying chapter directly...");
+          const qChap = query(collection(db, 'questions'), where('chapter', '==', chap));
+          try {
+            const chapSnapshot = await getDocs(qChap);
+            chapQsDetail = chapSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
+          } catch (e) {
+            handleFirestoreError(e, OperationType.GET, 'questions');
+          }
+        }
         
-        const algebra = shuffle(all.filter(q => q.category === 'Số và Đại số')).slice(0, 8);
-        const geometry = shuffle(all.filter(q => q.category === 'Hình học và Đo lường')).slice(0, 6);
-        const stats = shuffle(all.filter(q => q.category === 'Thống kê và Xác suất')).slice(0, 2);
-        allSelected = [...algebra, ...geometry, ...stats];
+        if (chapQsDetail.length === 0) {
+          alert(`Chương này hiện chưa có câu hỏi trong ngân hàng đề. Vui lòng chọn chương khác.`);
+          setLoadingQuestions(false);
+          return false;
+        }
+
+        // Trộn ngẫu nhiên câu hỏi của chương
+        finalQuestions = shuffle(chapQsDetail).slice(0, 16);
+      } else {
+        // Mode B: standard mock exam phân bổ đúng tỷ lệ theo chương học (Tổng cộng 16 câu)
+        const chapterQuotas: Record<string, number> = {
+          'Chương I. PHƯƠNG TRÌNH VÀ HỆ HAI PHƯƠNG TRÌNH BẬC NHẤT HAI ẨN': 2,
+          'Chương II. PHƯƠNG TRÌNH VÀ BẤT PHƯƠNG TRÌNH BẬC NHẤT MỘT ẨN': 2,
+          'Chương III. CĂN BẬC HAI VÀ CĂN BẬC BA': 2,
+          'Chương VI. HÀM SỐ y = ax² (a ≠ 0). PHƯƠNG TRÌNH BẬC HAI MỘT ẨN': 2,
+          'Chương IV. HỆ THỨC LƯỢNG TRONG TAM GIÁC VUÔNG': 1,
+          'Chương X. MỘT SỐ HÌNH KHỐI TRONG THỰC TIỄN': 1,
+          'Chương V. ĐƯỜNG TRÒN': 2,
+          'Chương IX. ĐƯỜNG TRÒN NGOẠI TIẾP VÀ ĐƯỜNG TRÒN NỘI TIẾP': 2,
+          'Chương VII. TẦN SỐ VÀ TẦN SỐ TƯƠNG ĐỐI': 1,
+          'Chương VIII. XÁC SUẤT CỦA BIẾN CỐ TRONG MỘT SỐ MÔ HÌNH XÁC SUẤT ĐƠN GIẢN': 1
+        };
+
+        const getNormalizedKey = (chName: string): string | null => {
+          if (!chName) return null;
+          const clean = chName.trim().toUpperCase()
+            .replace(/\s+/g, ' ')
+            .replace(/\$/g, '')
+            .replace(/\\NEQ/g, '≠')
+            .replace(/\\NOT=/g, '≠')
+            .replace(/≠/g, '!=')
+            .replace(/\^2/g, '²');
+          
+          for (const key of Object.keys(chapterQuotas)) {
+            const keyClean = key.trim().toUpperCase()
+              .replace(/\s+/g, ' ')
+              .replace(/\$/g, '')
+              .replace(/\\NEQ/g, '≠')
+              .replace(/\\NOT=/g, '≠')
+              .replace(/≠/g, '!=')
+              .replace(/\^2/g, '²');
+            if (clean === keyClean) {
+              return key;
+            }
+          }
+          return null;
+        };
+
+        let selectedIds: string[] = [];
+        
+        if (allQsMetaData.length > 0) {
+          // Gom các câu hỏi theo chương tương ứng dựa trên dữ liệu metadata gọn nhẹ
+          const questionsByChapter: Record<string, { id: string; chapter: string; category: string }[]> = {};
+          allQsMetaData.forEach(q => {
+            const chName = q.chapter ? q.chapter.trim() : '';
+            if (chName) {
+              const matchedKey = getNormalizedKey(chName);
+              if (matchedKey) {
+                if (!questionsByChapter[matchedKey]) {
+                  questionsByChapter[matchedKey] = [];
+                }
+                questionsByChapter[matchedKey].push(q);
+              }
+            }
+          });
+
+          const usedIds = new Set<string>();
+
+          // Chọn theo đúng quota của từng chương
+          Object.keys(chapterQuotas).forEach(ch => {
+            const quota = chapterQuotas[ch];
+            const chQs = shuffle(questionsByChapter[ch] || []);
+            const chosen = chQs.slice(0, quota);
+            chosen.forEach(q => {
+              if (q.id) {
+                selectedIds.push(q.id);
+                usedIds.add(q.id);
+              }
+            });
+          });
+
+          // Nếu tổng lượng câu hỏi chưa đủ 16, bù thêm bằng các ID còn lại
+          if (selectedIds.length < 16) {
+            const remainingQs = allQsMetaData.filter(q => q.id && !usedIds.has(q.id));
+            const fillQs = shuffle(remainingQs).slice(0, 16 - selectedIds.length);
+            fillQs.forEach(q => {
+              selectedIds.push(q.id);
+            });
+          }
+        }
+
+        // 2. Truy vấn chi tiết đúng 16 câu hỏi đã chọn qua IN query (Tối ưu tuyệt đối)
+        let allSelected: Question[] = [];
+        if (selectedIds.length > 0) {
+          const chunks = [];
+          for(let i = 0; i < selectedIds.length; i += 10) {
+              chunks.push(selectedIds.slice(i, i + 10));
+          }
+          
+          for (const chunk of chunks) {
+             if(chunk.length === 0) continue;
+             const q = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
+             try {
+               const snapshot = await getDocs(q);
+               allSelected = allSelected.concat(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Question)));
+             } catch (e) {
+               handleFirestoreError(e, OperationType.GET, 'questions');
+             }
+          }
+        }
+
+        // Fallback: nếu rỗng (ví dụ chưa có metadata), tải toàn bộ câu hỏi (An toàn)
+        if (allSelected.length === 0) {
+          let allQs: Question[] = [];
+          try {
+            const snapshot = await getDocs(collection(db, 'questions'));
+            allQs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Question));
+          } catch (e) {
+            handleFirestoreError(e, OperationType.GET, 'questions');
+          }
+
+          if (allQs.length === 0) {
+            throw new Error("Ngân hàng câu hỏi trống.");
+          }
+
+          const questionsByChapter: Record<string, Question[]> = {};
+          allQs.forEach(q => {
+            const chName = q.chapter ? q.chapter.trim() : '';
+            if (chName) {
+              const matchedKey = getNormalizedKey(chName);
+              if (matchedKey) {
+                if (!questionsByChapter[matchedKey]) {
+                  questionsByChapter[matchedKey] = [];
+                }
+                questionsByChapter[matchedKey].push(q);
+              }
+            }
+          });
+
+          const selectedQs: Question[] = [];
+          const usedIds = new Set<string>();
+
+          // Chọn theo đúng quota
+          Object.keys(chapterQuotas).forEach(ch => {
+            const quota = chapterQuotas[ch];
+            const chQs = shuffle(questionsByChapter[ch] || []);
+            const chosen = chQs.slice(0, quota);
+            chosen.forEach(q => {
+              if (q.id) {
+                selectedQs.push(q);
+                usedIds.add(q.id);
+              }
+            });
+          });
+
+          if (selectedQs.length < 16) {
+            const remainingQs = allQs.filter(q => q.id && !usedIds.has(q.id));
+            const fillQs = shuffle(remainingQs).slice(0, 16 - selectedQs.length);
+            fillQs.forEach(q => {
+              selectedQs.push(q);
+            });
+          }
+
+          allSelected = selectedQs;
+        }
+
+        finalQuestions = shuffle(allSelected);
       }
 
-      const finalQuestions = shuffle(allSelected);
       setQuestions(finalQuestions);
-      
-      // Save to session storage so F5 doesn't re-fetch
       sessionStorage.setItem('quiz_current_questions_session', JSON.stringify(finalQuestions));
-      
+      setLoadingQuestions(false);
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching questions:", error);
-      const isQuotaError = error?.message?.toLowerCase().includes('quota') || error?.code === 'resource-exhausted';
-      const isOfflineError = error?.message?.toLowerCase().includes('offline');
-      
+      setLoadingQuestions(false);
+      const isQuotaError = (error as any)?.message?.toLowerCase().includes('quota') || (error as any)?.code === 'resource-exhausted';
       if (isQuotaError) {
-        alert("Hệ thống đã hết dung lượng hôm nay, hẹn bạn vào lại lúc 14h nhé");
-      } else if (isOfflineError) {
-        alert("Hiện không thể kết nối tới máy chủ (Offline). Vui lòng kiểm tra kết nối mạng hoặc quay lại sau.");
+        alert("Hệ thống đã hết dung lượng hôm nay, hẹn bạn vào lại lúc 14 h nhé");
       } else {
         alert("Lỗi khi tải câu hỏi: " + (error as Error).message);
       }
@@ -136,12 +430,35 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
     }
   };
 
-  const startQuiz = async () => {
+  useEffect(() => {
+    if (isQuickPractice) {
+      setStudentInfo({
+        name: 'Học sinh Tự luyện',
+        class: '9',
+        school: 'Luyện tập nhanh'
+      });
+      setSelectedChapter(quickPracticeChapter && quickPracticeChapter !== 'all' ? quickPracticeChapter : 'Tự luyện ngẫu nhiên (16 câu)');
+      
+      const startPractice = async () => {
+        const success = await fetchAndRandomize(quickPracticeChapter, true);
+        if (success) {
+          setStartTime(new Date());
+          setCurrentStep('doing');
+        }
+      };
+      startPractice();
+    }
+  }, [isQuickPractice, quickPracticeChapter]);
+
+  const startQuiz = async (chap?: string) => {
     if (!studentInfo.name || !studentInfo.class || !studentInfo.school) {
       alert('Vui lòng nhập đầy đủ thông tin');
       return;
     }
-    const success = await fetchAndRandomize();
+    const chapName = chap || null;
+    setSelectedChapter(chapName);
+    
+    const success = await fetchAndRandomize(chap);
     if (success) {
       setStartTime(new Date());
       setCurrentStep('doing');
@@ -161,29 +478,54 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
       }
     });
 
-    const finalScore = count * 0.25;
+    // Tính điểm trên thang 10 dựa trên số câu thực tế (Làm tròn 1 chữ số thập phân)
+    const finalScore = questions.length > 0 ? Math.round(((count / questions.length) * 10) * 10) / 10 : 0;
     setCorrectCount(count);
     setScore(finalScore);
 
-    try {
-      await addDoc(collection(db, 'results'), {
-        name: studentInfo.name,
-        class: studentInfo.class,
-        school: studentInfo.school,
-        score: finalScore,
-        correctCount: count,
-        totalQuestions: questions.length,
-        startTime: Timestamp.fromDate(startTime!),
-        submittedAt: serverTimestamp()
-      });
+    if (isQuickPractice) {
       setCurrentStep('result');
-    } catch (err) {
-      alert('Lỗi nộp bài');
+    } else {
+      try {
+        await addDoc(collection(db, 'results'), {
+          name: studentInfo.name,
+          class: studentInfo.class,
+          school: studentInfo.school,
+          score: finalScore,
+          correctCount: count,
+          totalQuestions: questions.length,
+          chapter: selectedChapter || 'Tổng hợp',
+          startTime: Timestamp.fromDate(startTime!),
+          submittedAt: serverTimestamp()
+        });
+        setCurrentStep('result');
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'results');
+      }
     }
     setIsSubmitting(false);
   };
 
   if (currentStep === 'info') {
+    if (loadingQuestions) {
+      return (
+        <div className="max-w-md mx-auto mt-1 md:mt-3 p-4 md:p-8 bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-2xl shadow-slate-200 border border-white flex flex-col items-center justify-center min-h-[400px]">
+          <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-6"></div>
+          <p className="text-lg font-black text-slate-800 text-center">
+            {isQuickPractice ? 'Đang chuẩn bị luyện tập nhanh...' : 'Đang khởi tạo đề thi mới...'}
+          </p>
+          <p className="text-sm text-slate-400 mt-2 font-bold text-center">
+            {isQuickPractice ? 'Hệ thống đang chọn 16 câu hỏi ngẫu nhiên cho bạn.' : 'Hệ thống đang chuẩn bị 16 câu hỏi chất lượng cao cho bạn.'}
+          </p>
+          {selectedChapter && (
+            <div className="mt-4 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl text-xs font-bold text-blue-600 max-w-sm text-center truncate shadow-sm">
+              {selectedChapter}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-md mx-auto mt-1 md:mt-3 p-4 md:p-8 bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-2xl shadow-slate-200 border border-white">
         <div className="text-center mb-2 md:mb-4">
@@ -197,53 +539,56 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
             <div className="w-6"></div>
           </div>
           <h2 className="text-xl md:text-2xl font-black text-slate-800">Thông tin học sinh</h2>
-          <p className="text-[10px] md:text-sm text-slate-400 mt-1 font-medium italic">Nhập thông tin để bắt đầu</p>
+          <p className="text-[10px] md:text-sm text-slate-400 mt-1 font-semibold italic">Nhập thông tin đề thi & vào làm ngay</p>
         </div>
-        <div className="space-y-2 md:space-y-3">
-          <div>
-            <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Họ và Tên</label>
-            <input 
-              type="text" 
-              className="w-full p-2.5 md:p-3.5 bg-slate-50 border border-slate-100 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm md:text-base font-bold"
-              placeholder="Nguyễn Văn A"
-              value={studentInfo.name}
-              onChange={e => setStudentInfo({...studentInfo, name: e.target.value})}
-            />
-          </div>
+        <div className="space-y-3 md:space-y-4">
+          {/* Trường & Lớp (Đặt lên trước để danh sách học sinh theo lớp hiển thị chuẩn xác) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Lớp / Khối</label>
+              <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1 flex items-center gap-1">
+                <School size={12} className="text-blue-500" />
+                <span>Trường</span>
+              </label>
               <div className="relative">
                 <select 
-                  className="w-full p-2.5 md:p-3.5 bg-slate-50 border border-slate-100 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm md:text-base font-bold appearance-none cursor-pointer"
-                  value={studentInfo.class}
-                  onChange={e => setStudentInfo({...studentInfo, class: e.target.value})}
+                  className="w-full p-2.5 md:p-3 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-xs md:text-sm font-bold appearance-none cursor-pointer"
+                  value={studentInfo.school}
+                  onChange={e => {
+                    const newSchool = e.target.value;
+                    const availableClasses = SCHOOL_CLASSES[newSchool] || ['Học thêm'];
+                    const newClass = availableClasses.includes(studentInfo.class) ? studentInfo.class : availableClasses[0];
+                    setStudentInfo({ ...studentInfo, school: newSchool, class: newClass, name: '' });
+                    setShowNameDropdown(false);
+                  }}
                 >
-                  <option value="">Lớp...</option>
-                  <option value="9A">9A</option>
-                  <option value="9B">9B</option>
-                  <option value="9C">9C</option>
-                  <option value="9D">9D</option>
-                  <option value="9E">9E</option>
+                  <option value="THCS Nam Cửa Việt">THCS Nam Cửa Việt</option>
+                  <option value="TH&THCS Đoàn Khuê">TH&THCS Đoàn Khuê</option>
                 </select>
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                   <ChevronRight size={14} className="rotate-90" />
                 </div>
               </div>
             </div>
+
             <div>
-              <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Trường</label>
+              <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1 flex items-center gap-1">
+                <GraduationCap size={12} className="text-blue-500" />
+                <span>Lớp</span>
+              </label>
               <div className="relative">
                 <select 
-                  className="w-full p-2.5 md:p-3.5 bg-slate-50 border border-slate-100 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm md:text-base font-bold appearance-none cursor-pointer"
-                  value={studentInfo.school}
-                  onChange={e => setStudentInfo({...studentInfo, school: e.target.value})}
+                  className="w-full p-2.5 md:p-3 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-xs md:text-sm font-bold appearance-none cursor-pointer"
+                  value={studentInfo.class}
+                  onChange={e => {
+                    setStudentInfo({ ...studentInfo, class: e.target.value, name: '' });
+                    setShowNameDropdown(false);
+                  }}
                 >
-                  <option value="">Trường...</option>
-                  <option value="THCS Triệu Trạch">THCS Triệu Trạch</option>
-                  <option value="TH&THCS Triệu Sơn">TH&THCS Triệu Sơn</option>
-                  <option value="THCS Nguyễn Bỉnh Khiêm">THCS Nguyễn Bỉnh Khiêm</option>
-                  <option value="THCS Lý Tự Trọng">THCS Lý Tự Trọng</option>
+                  {(SCHOOL_CLASSES[studentInfo.school] || ['9A8', '9A9', 'Học thêm']).map(cls => (
+                    <option key={cls} value={cls}>
+                      {cls === 'Học thêm' ? 'Lớp Học thêm' : `Lớp ${cls}`}
+                    </option>
+                  ))}
                 </select>
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
                   <ChevronRight size={14} className="rotate-90" />
@@ -251,11 +596,228 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
               </div>
             </div>
           </div>
+
+          {/* Họ và Tên với Menu Thả gợi ý & Chọn nhanh theo danh sách lớp */}
+          <div ref={nameDropdownRef} className="relative">
+            <div className="flex items-center justify-between mb-1 ml-1">
+              <label className="text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <User size={12} className="text-blue-500" />
+                <span>Họ và Tên</span>
+              </label>
+              {classRoster.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowNameDropdown(!showNameDropdown)}
+                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer transition-colors bg-blue-50 px-2 py-0.5 rounded-md hover:bg-blue-100"
+                >
+                  <Users size={11} />
+                  <span>DS Lớp {studentInfo.class} ({classRoster.length} HS)</span>
+                  <ChevronDown size={12} className={`transition-transform ${showNameDropdown ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+            </div>
+
+            <div className="relative">
+              <input 
+                type="text" 
+                className={`w-full p-2.5 md:p-3.5 bg-slate-50 border rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm md:text-base font-bold pr-10 ${
+                  classRoster.includes(studentInfo.name.trim()) 
+                    ? 'border-emerald-300 bg-emerald-50/30' 
+                    : 'border-slate-200'
+                }`}
+                placeholder="Nhập hoặc chọn tên học sinh..."
+                value={studentInfo.name}
+                onFocus={() => {
+                  if (classRoster.length > 0) setShowNameDropdown(true);
+                }}
+                onChange={e => {
+                  setStudentInfo({ ...studentInfo, name: e.target.value });
+                  if (classRoster.length > 0) setShowNameDropdown(true);
+                }}
+              />
+              
+              {/* Nút bật tắt dropdown menu */}
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowNameDropdown(!showNameDropdown)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors"
+                title="Bấm để mở danh sách học sinh lớp"
+              >
+                {isRosterLoading ? (
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <ChevronDown size={18} className={`transition-transform ${showNameDropdown ? 'rotate-180 text-blue-600' : ''}`} />
+                )}
+              </button>
+            </div>
+
+            {/* Trạng thái xác nhận tên */}
+            {studentInfo.name && (
+              <div className="mt-1 flex items-center justify-between text-[11px] px-1">
+                {classRoster.includes(studentInfo.name.trim()) ? (
+                  <span className="text-emerald-700 font-bold flex items-center gap-1">
+                    <CheckCircle2 size={13} className="text-emerald-600" />
+                    Đúng tên trong danh sách lớp {studentInfo.class}
+                  </span>
+                ) : classRoster.length > 0 ? (
+                  <span className="text-amber-600 font-medium flex items-center gap-1">
+                    <Sparkles size={12} className="text-amber-500" />
+                    Chưa khớp danh sách lớp (Hãy chọn từ menu bên dưới để thống kê chính xác nhất)
+                  </span>
+                ) : null}
+              </div>
+            )}
+
+            {/* Menu Thả / Dropdown Danh Sách Học Sinh */}
+            <AnimatePresence>
+              {showNameDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden max-h-60 flex flex-col"
+                >
+                  <div className="p-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-[11px] font-bold text-slate-600">
+                    <span className="flex items-center gap-1.5">
+                      <Users size={13} className="text-blue-600" />
+                      Danh sách lớp {studentInfo.class} ({studentInfo.school})
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {getRosterSuggestions(studentInfo.name, classRoster).length} gợi ý
+                    </span>
+                  </div>
+
+                  <div className="overflow-y-auto divide-y divide-slate-100 flex-1 p-1">
+                    {getRosterSuggestions(studentInfo.name, classRoster).length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        {classRoster.length === 0 ? (
+                          <span>Chưa có danh sách lớp được tải lên. Bạn có thể tự nhập tên trực tiếp.</span>
+                        ) : (
+                          <span>Không tìm thấy học sinh phù hợp với từ khóa "{studentInfo.name}".</span>
+                        )}
+                      </div>
+                    ) : (
+                      getRosterSuggestions(studentInfo.name, classRoster).map((stName, idx) => {
+                        const isSelected = studentInfo.name.trim().toLowerCase() === stName.trim().toLowerCase();
+                        const parts = stName.split(' ');
+                        const given = parts[parts.length - 1];
+                        const initials = parts.map(p => p[0]).join('').slice(0, 2).toUpperCase();
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setStudentInfo({ ...studentInfo, name: stName });
+                              setShowNameDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors group ${
+                              isSelected 
+                                ? 'bg-blue-600 text-white font-black' 
+                                : 'hover:bg-blue-50 text-slate-800 font-medium'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                                isSelected ? 'bg-white text-blue-600' : 'bg-slate-100 text-slate-600 group-hover:bg-blue-200 group-hover:text-blue-800'
+                              }`}>
+                                {initials}
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold leading-tight">{stName}</div>
+                                <div className={`text-[10px] ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                                  Lớp {studentInfo.class}
+                                </div>
+                              </div>
+                            </div>
+
+                            {isSelected && <Check size={14} className="text-white shrink-0" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="p-2 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400 text-center">
+                    💡 Click để chọn đúng tên giúp việc thống kê tháng chính xác tuyệt đối
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="border-t border-slate-100 pt-3 md:pt-4">
+            <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Bước 1: Chọn phân môn / kiểu đề</label>
+            <div className="relative">
+              <select 
+                className="w-full p-2.5 md:p-3.5 bg-slate-50 border border-slate-100 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm md:text-base font-bold appearance-none cursor-pointer text-slate-700 font-extrabold"
+                value={selectedPart}
+                onChange={e => {
+                  setSelectedPart(e.target.value);
+                  setSelectedChapDropdown('');
+                }}
+              >
+                <option value="">-- Click để chọn --</option>
+                <option value="all">Thi Thử Tổng Hợp Toàn Diện (16 câu)</option>
+                <option value="Số và Đại số">Số và Đại số (Đại Số)</option>
+                <option value="Hình học và Đo lường">Hình học và Đo lường (Hình Học)</option>
+                <option value="Thống kê và Xác suất">Thống kê và Xác suất</option>
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                <ChevronRight size={14} className="rotate-90" />
+              </div>
+            </div>
+          </div>
+
+          {selectedPart && selectedPart !== 'all' && (
+            <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+              <label className="block text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Bước 2: Chọn chương học tương ứng</label>
+              <div className="relative">
+                <select 
+                  className="w-full p-2.5 md:p-3.5 bg-slate-50 border border-slate-100 rounded-lg md:rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm md:text-base font-bold appearance-none cursor-pointer text-slate-700 font-extrabold"
+                  value={selectedChapDropdown}
+                  onChange={e => setSelectedChapDropdown(e.target.value)}
+                >
+                  <option value="">-- Chọn chương học --</option>
+                  {PART_CHAPTERS[selectedPart]?.map((chap, i) => (
+                    <option key={i} value={chap}>
+                      {chap}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                  <ChevronRight size={14} className="rotate-90" />
+                </div>
+              </div>
+            </div>
+          )}
+
           <button 
-            onClick={startQuiz}
-            className="w-full bg-blue-600 text-white py-3 md:py-4 rounded-lg md:rounded-xl font-black text-sm md:text-base hover:bg-blue-700 transition shadow-lg shadow-blue-100 mt-2 active:scale-95 transform tracking-widest uppercase"
+            onClick={() => {
+              if (!studentInfo.name || !studentInfo.class || !studentInfo.school) {
+                alert('Vui lòng nhập đầy đủ thông tin học sinh');
+                return;
+              }
+              if (!selectedPart) {
+                alert('Vui lòng chọn phân môn / kiểu đề thi');
+                return;
+              }
+              if (selectedPart !== 'all' && !selectedChapDropdown) {
+                alert('Vui lòng chọn chương học tương ứng');
+                return;
+              }
+              
+              if (selectedPart === 'all') {
+                startQuiz();
+              } else {
+                startQuiz(selectedChapDropdown);
+              }
+            }}
+            className="w-full bg-blue-600 text-white py-3 md:py-4 rounded-lg md:rounded-xl font-black text-sm md:text-base hover:bg-blue-700 transition shadow-lg shadow-blue-100 mt-4 active:scale-95 transform tracking-widest uppercase flex items-center justify-center gap-2"
           >
-            BẮT ĐẦU LÀM BÀI
+            VÀO THI NGAY <ArrowRight size={18} />
           </button>
         </div>
       </div>
@@ -452,21 +1014,33 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
           <CheckCircle2 size={32} className="md:w-12 md:h-12" />
         </motion.div>
         
-        <h2 className="text-xl md:text-3xl font-black text-slate-800 mb-1 tracking-tight">Kết thúc bài thi!</h2>
-        <p className="text-[10px] md:text-base text-slate-400 mb-6 md:mb-8 font-bold px-4 tracking-tight">Chúc mừng <span className="text-blue-600 uppercase">{studentInfo.name}</span> đã hoàn thành.</p>
+        <h2 className="text-xl md:text-3xl font-black text-slate-800 mb-1 tracking-tight">
+          {isQuickPractice ? 'Hoàn thành luyện tập!' : 'Kết thúc bài thi!'}
+        </h2>
+        <p className="text-[10px] md:text-base text-slate-400 mb-6 md:mb-8 font-bold px-4 tracking-tight">
+          {isQuickPractice 
+            ? 'Tuyệt vời! Bạn vừa hoàn thành bài luyện tập nhanh 16 câu hỏi.'
+            : <span>Chúc mừng <span className="text-blue-600 uppercase">{studentInfo.name}</span> đã hoàn thành.</span>}
+        </p>
         
         <div className="mb-6 md:mb-10">
            <div className="bg-blue-600 p-5 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl shadow-blue-200 text-white inline-block min-w-[180px] md:min-w-[280px]">
-              <div className="text-[9px] md:text-[11px] text-blue-100 font-black uppercase tracking-[0.2em] mb-2 md:mb-4 leading-none">Điểm số của bạn</div>
-              <div className="flex items-center justify-center gap-1 md:gap-2">
-                 <span className="text-4xl md:text-8xl font-black tracking-tighter">{score % 1 === 0 ? score : score.toFixed(2)}</span>
-                 <span className="text-xl md:text-4xl font-bold text-blue-300">/ 4</span>
-              </div>
+               <div className="text-[9px] md:text-[11px] text-blue-100 font-black uppercase tracking-[0.2em] mb-2 md:mb-4 leading-none">
+                 Điểm số của bạn
+               </div>
+               <div className="flex items-center justify-center gap-1 md:gap-2">
+                  <span className="text-4xl md:text-8xl font-black tracking-tighter">
+                    {score.toFixed(1)}
+                  </span>
+                  <span className="text-xl md:text-4xl font-bold text-blue-300">
+                    / 10
+                  </span>
+               </div>
            </div>
         </div>
 
         <div className="bg-slate-50 p-3 md:p-5 rounded-lg md:rounded-xl border border-slate-100 mb-6 md:mb-8 inline-flex items-center gap-2 md:gap-4 mx-4">
-           <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${correctCount >= 8 ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+           <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${score >= 5.0 ? 'bg-green-500' : 'bg-orange-500'}`}></div>
            <span className="text-[9px] md:text-sm font-black text-slate-600 uppercase tracking-widest leading-none">
              Đúng: <span className="text-slate-900">{correctCount}</span> / {questions.length} câu
            </span>
@@ -483,19 +1057,34 @@ export default function Quiz({ onBack }: { onBack?: () => void }) {
               Xem lại bài
             </button>
             <button 
-              onClick={() => {
-                sessionStorage.removeItem('quiz_current_questions_session');
-                setStudentInfo({ name: '', class: '', school: '' });
-                setUserAnswers({});
-                setCurrentIndex(0);
-                setScore(0);
-                setCorrectCount(0);
-                setQuestions([]);
-                setCurrentStep('info');
+              onClick={async () => {
+                if (isQuickPractice) {
+                  sessionStorage.removeItem('quiz_current_questions_session');
+                  setUserAnswers({});
+                  setCurrentIndex(0);
+                  setScore(0);
+                  setCorrectCount(0);
+                  setQuestions([]);
+                  setLoadingQuestions(true);
+                  const success = await fetchAndRandomize(quickPracticeChapter, true);
+                  if (success) {
+                    setStartTime(new Date());
+                    setCurrentStep('doing');
+                  }
+                } else {
+                  sessionStorage.removeItem('quiz_current_questions_session');
+                  setStudentInfo({ name: '', class: '', school: '' });
+                  setUserAnswers({});
+                  setCurrentIndex(0);
+                  setScore(0);
+                  setCorrectCount(0);
+                  setQuestions([]);
+                  setCurrentStep('info');
+                }
               }}
               className="px-4 py-3 md:py-4 bg-slate-900 text-white rounded-lg md:rounded-xl font-black text-[10px] md:text-xs hover:bg-slate-800 transition shadow-lg shadow-slate-100 uppercase tracking-wider"
             >
-              Làm đề mới
+              {isQuickPractice ? 'Luyện đề khác' : 'Làm đề mới'}
             </button>
             <button 
               onClick={onBack}

@@ -15,7 +15,6 @@ interface QuizPreviewProps {
 
 export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQuestion, onDeleteQuestion, loading }: QuizPreviewProps) {
   const [editStates, setEditStates] = React.useState<Record<number, 'none' | 'content' | 'options'>>({});
-
   const [confirmDeleteIdx, setConfirmDeleteIdx] = React.useState<number | null>(null);
 
   const toggleEdit = (idx: number) => {
@@ -27,16 +26,6 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
       else next = 'none';
       return { ...prev, [idx]: next };
     });
-  };
-
-  const handleDelete = (idx: number) => {
-    if (confirmDeleteIdx === idx) {
-      onDeleteQuestion?.(idx);
-      setConfirmDeleteIdx(null);
-    } else {
-      setConfirmDeleteIdx(idx);
-      setTimeout(() => setConfirmDeleteIdx(null), 3000);
-    }
   };
 
   return (
@@ -97,25 +86,41 @@ export default function QuizPreview({ questions, onConfirm, onCancel, onUpdateQu
                             {state === 'content' ? 'Sửa nội dung' : 'Sửa đáp án'}
                           </span>
                         )}
-                        {q.validationError && (
-                          <span className="px-2 py-1 bg-red-100 text-red-600 text-[8px] md:text-[10px] font-black rounded-lg border border-red-200 uppercase flex items-center gap-1">
-                            <X size={10} /> {q.validationError}
-                          </span>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
                         {onDeleteQuestion && (
-                          <button
-                            onClick={() => handleDelete(idx)}
-                            className={`p-2 rounded-xl transition-all flex items-center gap-2 ${confirmDeleteIdx === idx ? 'bg-red-600 text-white shadow-lg animate-pulse' : 'bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700'}`}
-                            title="Xóa câu hỏi này"
-                          >
-                            <Trash2 size={18} />
-                            <span className="text-[10px] font-bold uppercase hidden md:inline">
-                              {confirmDeleteIdx === idx ? 'Xác nhận?' : 'Xóa'}
-                            </span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                if (confirmDeleteIdx === idx) {
+                                  onDeleteQuestion(idx);
+                                  setConfirmDeleteIdx(null);
+                                } else {
+                                  setConfirmDeleteIdx(idx);
+                                }
+                              }}
+                              className={`p-2 rounded-xl transition-all flex items-center gap-2 font-black ${
+                                confirmDeleteIdx === idx
+                                  ? 'bg-red-600 text-white shadow-lg shadow-red-200'
+                                  : 'bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700'
+                              }`}
+                              title={confirmDeleteIdx === idx ? 'Xác nhận xóa câu hỏi này?' : 'Xóa câu hỏi này'}
+                            >
+                              <Trash2 size={18} />
+                              <span className="text-[10px] font-bold uppercase hidden md:inline">
+                                {confirmDeleteIdx === idx ? 'Xác nhận xóa?' : 'Xóa'}
+                              </span>
+                            </button>
+                            {confirmDeleteIdx === idx && (
+                              <button 
+                                onClick={() => setConfirmDeleteIdx(null)}
+                                className="px-2.5 py-1.5 text-slate-400 font-bold text-[10px] hover:bg-slate-100 rounded-lg transition"
+                              >
+                                Hủy
+                              </button>
+                            )}
+                          </div>
                         )}
                         <button 
                           onClick={() => toggleEdit(idx)}
