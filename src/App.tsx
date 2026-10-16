@@ -8,7 +8,7 @@ import Quiz from './components/Quiz';
 import AdminPanel from './components/AdminPanel';
 import { Lock, GraduationCap, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth } from './lib/firebase';
+import { auth, PART_CHAPTERS } from './lib/firebase';
 
 // Utility for password hashing
 async function hashSecret(text: string) {
@@ -21,6 +21,8 @@ async function hashSecret(text: string) {
 export default function App() {
   const [view, setView] = useState<'landing' | 'quiz' | 'admin' | 'admin_login'>('landing');
   const [adminCreds, setAdminCreds] = useState({ user: '', pass: '' });
+  const [isQuickPractice, setIsQuickPractice] = useState(false);
+  const [quickPracticeChapter, setQuickPracticeChapter] = useState('all');
   useEffect(() => {
     // Kiểm tra session cục bộ (local)
     const isAdminSession = sessionStorage.getItem('isAdmin') === 'true';
@@ -81,23 +83,74 @@ export default function App() {
               </p>
             </div>
 
-            <div className="w-full max-w-4xl space-y-2">
-              <div className="max-w-md mx-auto">
+            <div className="w-full max-w-4xl px-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                {/* Luyện thi Chính thức */}
                 <button 
-                  onClick={() => setView('quiz')}
-                  className="group relative w-full p-3 md:p-4 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-blue-500 transition-all text-left flex flex-col items-center text-center"
+                  onClick={() => {
+                    setIsQuickPractice(false);
+                    setView('quiz');
+                  }}
+                  className="group relative w-full p-5 md:p-6 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-blue-500 transition-all text-left flex flex-col items-center text-center cursor-pointer"
                 >
-                  <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-lg shadow-blue-200">
+                  <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-blue-200">
                     <GraduationCap size={20} />
                   </div>
-                  <h3 className="text-lg font-black mb-0.5 text-slate-800">Bắt đầu Luyện thi</h3>
-                  <p className="text-slate-500 mb-3 leading-relaxed text-[11px] font-medium">
-                    16 câu 4 điểm theo cấu trúc SGD Quảng Trị
+                  <h3 className="text-lg font-black mb-1 text-slate-800">Luyện Thi Chính Thức</h3>
+                  <p className="text-slate-500 mb-4 leading-relaxed text-[11px] font-medium max-w-xs">
+                    Phần thi đầy đủ 16 câu (10 điểm), yêu cầu nhập tên lớp và lưu lịch sử bài làm.
                   </p>
-                  <div className="inline-flex items-center gap-2 px-5 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-lg shadow-blue-200 group-hover:bg-blue-700 transition-colors">
+                  <div className="inline-flex items-center gap-2 px-5 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-lg shadow-blue-200 group-hover:bg-blue-700 transition-colors mt-auto">
                     VÀO THI NGAY <ArrowRight size={16} />
                   </div>
                 </button>
+
+                {/* Luyện tập Nhanh */}
+                <div 
+                  className="group relative w-full p-5 md:p-6 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 hover:border-amber-500 transition-all text-left flex flex-col items-center text-center"
+                >
+                  <div className="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-amber-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-zap"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46L12.14 10l5.84.57a1 1 0 0 1 .77 1.62l-9.9 10.2a.5.5 0 0 1-.86-.46L9.86 14Z"/></svg>
+                  </div>
+                  <h3 className="text-lg font-black mb-1 text-slate-800">Luyện Tập Nhanh</h3>
+                  <p className="text-slate-500 mb-4 leading-relaxed text-[11px] font-medium max-w-xs">
+                    Thử sức nhẹ nhàng với 16 câu hỏi ngẫu nhiên lập tức mà không cần khai báo danh tính.
+                  </p>
+
+                  {/* Menu thả xuống chọn chương học */}
+                  <div className="w-full mt-1 mb-4 select-none">
+                    <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 text-center">
+                      Chọn chương học luyện tập (16 câu)
+                    </label>
+                    <div className="relative max-w-xs mx-auto">
+                      <select
+                        value={quickPracticeChapter}
+                        onChange={(e) => setQuickPracticeChapter(e.target.value)}
+                        className="w-full text-left p-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white text-xs font-bold text-slate-700 cursor-pointer appearance-none shadow-sm pr-8 pl-4"
+                      >
+                        <option value="all">⚡ Ngẫu nhiên tất cả chương</option>
+                        {Object.values(PART_CHAPTERS).flat().map((chap, idx) => (
+                          <option key={idx} value={chap}>
+                            📖 {chap}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-right rotate-90"><path d="m9 18 6-6-6-6"/></svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setIsQuickPractice(true);
+                      setView('quiz');
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-amber-500 text-white rounded-lg font-bold text-sm shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all hover:scale-105 active:scale-95 cursor-pointer mt-auto"
+                  >
+                    LUYỆN TẬP NGAY <ArrowRight size={16} />
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -115,13 +168,24 @@ export default function App() {
                 <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-base">Σ</div>
                 <span className="text-base font-bold tracking-tight text-slate-800">LUYỆN THI <span className="text-blue-600">LÊ LỢI</span></span>
               </div>
-              <button onClick={() => setView('landing')} className="text-slate-400 hover:text-blue-600 font-bold text-[10px] md:text-sm flex items-center gap-2 transition-colors">
+              <button 
+                onClick={() => {
+                  setView('landing');
+                  setIsQuickPractice(false);
+                }} 
+                className="text-slate-400 hover:text-blue-600 font-bold text-[10px] md:text-sm flex items-center gap-2 transition-colors cursor-pointer"
+              >
                 ← THOÁT
               </button>
             </nav>
             <div className="p-1 md:p-4 pb-10">
               <Quiz 
-                onBack={() => setView('landing')} 
+                onBack={() => {
+                  setView('landing');
+                  setIsQuickPractice(false);
+                }} 
+                isQuickPractice={isQuickPractice}
+                quickPracticeChapter={quickPracticeChapter}
               />
             </div>
           </motion.div>
