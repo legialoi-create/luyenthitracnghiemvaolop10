@@ -3,21 +3,66 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymousl
 import { getFirestore, collection, addDoc, getDocs, query, where, deleteDoc, doc, Timestamp, orderBy, limit } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Validate config
-const isPlaceholder = (val?: string) => !val || val.includes('remixed-') || val.includes('MY_');
-
-if (isPlaceholder(firebaseConfig.projectId)) {
-  console.warn("Firebase configuration appears to be using placeholders. Please set up Firebase via the AI Studio UI.");
-}
-
 const app = initializeApp(firebaseConfig);
-
-// Use default database if firestoreDatabaseId is a placeholder or not provided
-const dbId = isPlaceholder(firebaseConfig.firestoreDatabaseId) ? undefined : firebaseConfig.firestoreDatabaseId;
-
-export const db = getFirestore(app, dbId);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
+export const loginAnonymously = () => signInAnonymously(auth);
+export const logout = () => signOut(auth);
+
+export interface Question {
+  id?: string;
+  content: string;
+  options: string[];
+  correctAnswer: number;
+  category: string;
+  chapter?: string;
+  createdAt: Timestamp | Date;
+}
+
+export const PART_CHAPTERS: Record<string, string[]> = {
+  'Số và Đại số': [
+    'Chương I. PHƯƠNG TRÌNH VÀ HỆ HAI PHƯƠNG TRÌNH BẬC NHẤT HAI ẨN',
+    'Chương II. PHƯƠNG TRÌNH VÀ BẤT PHƯƠNG TRÌNH BẬC NHẤT MỘT ẨN',
+    'Chương III. CĂN BẬC HAI VÀ CĂN BẬC BA',
+    'Chương VI. HÀM SỐ y = ax² (a ≠ 0). PHƯƠNG TRÌNH BẬC HAI MỘT ẨN'
+  ],
+  'Hình học và Đo lường': [
+    'Chương IV. HỆ THỨC LƯỢNG TRONG TAM GIÁC VUÔNG',
+    'Chương V. ĐƯỜNG TRÒN',
+    'Chương IX. ĐƯỜNG TRÒN NGOẠI TIẾP VÀ ĐƯỜNG TRÒN NỘI TIẾP',
+    'Chương X. MỘT SỐ HÌNH KHỐI TRONG THỰC TIỄN'
+  ],
+  'Thống kê và Xác suất': [
+    'Chương VII. TẦN SỐ VÀ TẦN SỐ TƯƠNG ĐỐI',
+    'Chương VIII. XÁC SUẤT CỦA BIẾN CỐ TRONG MỘT SỐ MÔ HÌNH XÁC SUẤT ĐƠN GIẢN'
+  ]
+};
+
+export const SCHOOL_CLASSES: Record<string, string[]> = {
+  'THCS Nam Cửa Việt': ['9A8', '9A9', 'Học thêm'],
+  'TH&THCS Đoàn Khuê': ['Học thêm']
+};
+
+export interface QuizResult {
+  id?: string;
+  name: string;
+  class: string;
+  school?: string;
+  score: number;
+  startTime: Timestamp | Date;
+  submittedAt: Timestamp | Date;
+}
+
+export interface ClassRoster {
+  id?: string;
+  school: string;
+  class: string;
+  students: string[];
+  updatedAt?: Timestamp | Date;
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -61,42 +106,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     },
     operationType,
     path
-  }
+  };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
-}
-
-// Test connection on boot
-if (typeof window !== 'undefined' && !isPlaceholder(firebaseConfig.projectId)) {
-  import('firebase/firestore').then(({ doc, getDocFromCache, getDocFromServer }) => {
-    // Try server first to check connectivity
-    getDocFromServer(doc(db, 'metadata', 'questions')).catch(err => {
-      if (err.message.includes('offline')) {
-          console.error("Firestore is offline. Check your network or Firebase project configuration.");
-      }
-    });
-  });
-}
-
-export const loginWithGoogle = () => signInWithPopup(auth, googleProvider);
-export const loginAnonymously = () => signInAnonymously(auth);
-export const logout = () => signOut(auth);
-
-export interface Question {
-  id?: string;
-  content: string;
-  options: string[];
-  correctAnswer: number;
-  category: string;
-  createdAt: Timestamp | Date;
-}
-
-export interface QuizResult {
-  id?: string;
-  name: string;
-  class: string;
-  school?: string;
-  score: number;
-  startTime: Timestamp | Date;
-  submittedAt: Timestamp | Date;
 }
